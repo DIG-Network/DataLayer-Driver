@@ -12,10 +12,10 @@ use chia::clvm_utils::tree_hash;
 use chia::clvm_utils::CurriedProgram;
 use chia::consensus::consensus_constants::ConsensusConstants;
 use chia::consensus::gen::{
-    conditions::EmptyVisitor, flags::MEMPOOL_MODE, owned_conditions::OwnedSpendBundleConditions,
-    run_block_generator::run_block_generator, solution_generator::solution_generator,
+    flags::MEMPOOL_MODE, owned_conditions::OwnedSpendBundleConditions,
     validation_error::ValidationErr,
 };
+use chia::consensus::spendbundle_conditions::run_spendbundle;
 use chia::protocol::CoinState;
 use chia::protocol::{
     Bytes, Bytes32, Coin, CoinSpend, CoinStateFilters, RejectHeaderRequest, RequestBlockHeader,
@@ -26,7 +26,9 @@ use chia::puzzles::standard::StandardArgs;
 use chia::puzzles::standard::StandardSolution;
 use chia::puzzles::DeriveSynthetic;
 use chia_wallet_sdk::announcement_id;
+use chia_wallet_sdk::AggSigConstants;
 use chia_wallet_sdk::CreateCoin;
+use chia_wallet_sdk::SpendWithConditions;
 use chia_wallet_sdk::TESTNET11_CONSTANTS;
 use chia_wallet_sdk::{
     get_merkle_tree, select_coins as select_coins_algo, ClientError, CoinSelectionError, Condition,
@@ -187,11 +189,11 @@ fn spend_coins_together(
                 conditions = conditions.create_coin(change_puzzle_hash, change, Vec::new());
             }
 
-            ctx.spend_p2_coin(coin, synthetic_key, conditions)?;
+            StandardLayer::new(synthetic_key).spend(ctx, coin, conditions)?;
         } else {
-            ctx.spend_p2_coin(
+            StandardLayer::new(synthetic_key).spend(
+                ctx,
                 coin,
-                synthetic_key,
                 Conditions::new().assert_concurrent_spend(first_coin_id),
             )?;
         }
@@ -434,9 +436,9 @@ pub fn mint_store(
     let lead_coin_name = lead_coin.coin_id();
 
     for coin in selected_coins.into_iter().skip(1) {
-        ctx.spend_p2_coin(
+        StandardLayer::new(minter_synthetic_key).spend(
+            &mut ctx,
             coin,
-            minter_synthetic_key,
             Conditions::new().assert_concurrent_spend(lead_coin_name),
         )?;
     }
@@ -479,7 +481,7 @@ pub fn mint_store(
     } else {
         launch_singleton
     };
-    ctx.spend_p2_coin(lead_coin, minter_synthetic_key, lead_coin_conditions)?;
+    StandardLayer::new(minter_synthetic_key).spend(&mut ctx, lead_coin, lead_coin_conditions)?;
 
     Ok(SuccessResponse {
         coin_spends: ctx.take(),
@@ -712,13 +714,15 @@ fn update_store_with_conditions(
     allow_writer: bool,
 ) -> Result<SuccessResponse, WalletError> {
     let inner_datastore_spend = match inner_spend_info {
-        DataStoreInnerSpend::Owner(pk) => StandardLayer::new(pk).spend(ctx, conditions)?,
+        DataStoreInnerSpend::Owner(pk) => {
+            StandardLayer::new(pk).spend_with_conditions(ctx, conditions)?
+        }
         DataStoreInnerSpend::Admin(pk) => {
             if !allow_admin {
                 return Err(WalletError::Permission);
             }
 
-            StandardLayer::new(pk).spend(ctx, conditions)?
+            StandardLayer::new(pk).spend_with_conditions(ctx, conditions)?
         }
         DataStoreInnerSpend::Writer(pk) => {
             if !allow_writer {
@@ -850,7 +854,8 @@ pub fn melt_store(
                 .map_err(DriverError::ToClvm)?,
         ));
 
-    let inner_datastore_spend = StandardLayer::new(owner_pk).spend(ctx, melt_conditions)?;
+    let inner_datastore_spend =
+        StandardLayer::new(owner_pk).spend_with_conditions(ctx, melt_conditions)?;
 
     let new_spend = datastore.spend(ctx, inner_datastore_spend)?;
 
@@ -883,9 +888,9 @@ pub fn oracle_spend(
 
     let total_amount_from_coins = selected_coins.iter().map(|c| c.amount).sum::<u64>();
     for coin in selected_coins.into_iter().skip(1) {
-        ctx.spend_p2_coin(
+        StandardLayer::new(spender_synthetic_key).spend(
+            ctx,
             coin,
-            spender_synthetic_key,
             Conditions::new().assert_concurrent_spend(lead_coin_name),
         )?;
     }
@@ -906,7 +911,7 @@ pub fn oracle_spend(
     if fee > 0 {
         lead_coin_conditions = lead_coin_conditions.reserve_fee(fee);
     }
-    ctx.spend_p2_coin(lead_coin, spender_synthetic_key, lead_coin_conditions)?;
+    StandardLayer::new(spender_synthetic_key).spend(ctx, lead_coin, lead_coin_conditions)?;
 
     let inner_datastore_spend = OracleLayer::new(*oracle_ph, *oracle_fee)
         .ok_or(DriverError::OddOracleFee)?
@@ -941,9 +946,9 @@ pub fn add_fee(
     let lead_coin_name = lead_coin.coin_id();
 
     for coin in selected_coins.into_iter().skip(1) {
-        ctx.spend_p2_coin(
+        StandardLayer::new(spender_synthetic_key).spend(
+            &mut ctx,
             coin,
-            spender_synthetic_key,
             Conditions::new().assert_concurrent_spend(lead_coin_name),
         )?;
     }
@@ -960,7 +965,7 @@ pub fn add_fee(
         lead_coin_conditions = lead_coin_conditions.assert_concurrent_spend(coin_id);
     }
 
-    ctx.spend_p2_coin(lead_coin, spender_synthetic_key, lead_coin_conditions)?;
+    StandardLayer::new(spender_synthetic_key).spend(&mut ctx, lead_coin, lead_coin_conditions)?;
 
     Ok(ctx.take())
 }
@@ -986,6 +991,10 @@ impl TargetNetwork {
             TargetNetwork::Testnet11 => &TESTNET11_CONSTANTS,
         }
     }
+
+    fn agg_sig_constants(&self) -> AggSigConstants {
+        AggSigConstants::new(self.get_constants().agg_sig_me_additional_data)
+    }
 }
 
 pub fn sign_coin_spends(
@@ -995,8 +1004,11 @@ pub fn sign_coin_spends(
 ) -> Result<Signature, SignerError> {
     let mut allocator = Allocator::new();
 
-    let required_signatures =
-        RequiredSignature::from_coin_spends(&mut allocator, &coin_spends, network.get_constants())?;
+    let required_signatures = RequiredSignature::from_coin_spends(
+        &mut allocator,
+        &coin_spends,
+        &network.agg_sig_constants(),
+    )?;
 
     let key_pairs = private_keys
         .iter()
@@ -1118,21 +1130,15 @@ pub fn verify_signature(
 
 pub fn get_cost(coin_spends: Vec<CoinSpend>) -> Result<u64, WalletError> {
     let mut alloc = Allocator::new();
+    let constants = TargetNetwork::Mainnet.get_constants();
 
-    let generator = solution_generator(
-        coin_spends
-            .into_iter()
-            .map(|cs| (cs.coin, cs.puzzle_reveal, cs.solution)),
-    )
-    .map_err(WalletError::Io)?;
-
-    let conds = run_block_generator::<&[u8], EmptyVisitor, _>(
+    let (conds, _pairs) = run_spendbundle(
         &mut alloc,
-        &generator,
-        [],
+        &SpendBundle::new(coin_spends, Signature::default()),
         u64::MAX,
+        1_000_000_000,
         MEMPOOL_MODE,
-        TargetNetwork::Mainnet.get_constants(),
+        constants,
     )?;
 
     let conds = OwnedSpendBundleConditions::from(&alloc, conds);

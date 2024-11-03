@@ -16,16 +16,15 @@ use chia::protocol::{
 use chia::puzzles::{standard::StandardArgs, DeriveSynthetic, Proof as RustProof};
 use chia::traits::Streamable;
 use chia_wallet_sdk::{
-    connect_peer, create_tls_connector, decode_address, encode_address, load_ssl_cert,
-    DataStore as RustDataStore, DataStoreInfo as RustDataStoreInfo,
-    DataStoreMetadata as RustDataStoreMetadata, DelegatedPuzzle as RustDelegatedPuzzle, NetworkId,
+    connect_peer, create_native_tls_connector, decode_address, encode_address, load_ssl_cert,
+    Connector, DataStore as RustDataStore, DataStoreInfo as RustDataStoreInfo,
+    DataStoreMetadata as RustDataStoreMetadata, DelegatedPuzzle as RustDelegatedPuzzle,
     Peer as RustPeer, MAINNET_CONSTANTS, TESTNET11_CONSTANTS,
 };
 use conversions::{ConversionError, FromJs, ToJs};
 use js::{Coin, CoinSpend, CoinState, EveProof, Proof, ServerCoin};
 use napi::bindgen_prelude::*;
 use napi::Result;
-use native_tls::TlsConnector;
 use std::collections::HashMap;
 use std::{net::SocketAddr, sync::Arc};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
@@ -431,7 +430,7 @@ impl ToJs<PossibleLaunchersResponse> for RustPossibleLaunchersResponse {
 }
 
 #[napi]
-pub struct Tls(TlsConnector);
+pub struct Tls(Connector);
 
 #[napi]
 impl Tls {
@@ -442,7 +441,7 @@ impl Tls {
     /// @param {String} keyPath - Path to the key file (usually '~/.chia/mainnet/config/ssl/wallet/wallet_node.key').
     pub fn new(cert_path: String, key_path: String) -> napi::Result<Self> {
         let cert = load_ssl_cert(&cert_path, &key_path).map_err(js::err)?;
-        let tls = create_tls_connector(&cert).map_err(js::err)?;
+        let tls = create_native_tls_connector(&cert).map_err(js::err)?;
         Ok(Self(tls))
     }
 }
@@ -463,12 +462,12 @@ impl Peer {
     /// @param {bool} testnet - True for connecting to testnet11, false for mainnet.
     /// @param {Tls} tls - TLS connector.
     /// @returns {Promise<Peer>} A new Peer instance.
-    pub async fn new(node_uri: String, tesntet: bool, tls: &Tls) -> napi::Result<Self> {
+    pub async fn new(node_uri: String, testnet: bool, tls: &Tls) -> napi::Result<Self> {
         let (peer, mut receiver) = connect_peer(
-            if tesntet {
-                NetworkId::Testnet11
+            if testnet {
+                "testnet11".to_string()
             } else {
-                NetworkId::Mainnet
+                "mainnet".to_string()
             },
             tls.0.clone(),
             if let Ok(socket_addr) = node_uri.parse::<SocketAddr>() {
@@ -523,6 +522,14 @@ impl Peer {
             peak,
             coin_listeners,
         })
+    }
+
+    #[napi]
+    /// Closes the peer connection. All future requests will fail.
+    ///
+    /// @returns {Promise<void>} A promise that resolves when the peer connection is closed.
+    pub async fn close(&self) -> napi::Result<()> {
+        self.inner.close().await.map_err(js::err)
     }
 
     #[napi]
