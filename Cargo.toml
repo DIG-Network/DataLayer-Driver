@@ -15,11 +15,12 @@ crate-type = ["cdylib"]
 napi = { version = "2.12.2", default-features = false, features = ["napi6", "async"] }
 napi-derive = "2.12.2"
 
-chia = "0.17.0"
+chia = "0.22.0"
+chia-puzzles = "0.20.1"
 thiserror = "1.0.61"
-clvmr = "0.10.0"
+clvmr = "0.13.1"
 tokio = "1.39.3"
-chia-wallet-sdk = { version = "0.20.0", features = ["chip-0035", "native-tls"] }
+chia-wallet-sdk = { version = "0.24.0", features = ["chip-0035", "native-tls"] }
 hex-literal = "0.4.1"
 num-bigint = "0.4.6"
 hex = "0.4.3"

@@ -17,11 +17,17 @@ use chia::protocol::{
 };
 use chia::puzzles::{standard::StandardArgs, DeriveSynthetic, Proof as RustProof};
 use chia::traits::Streamable;
+use chia_wallet_sdk::client::{
+    connect_peer, create_native_tls_connector, load_ssl_cert, Connector, PeerOptions,
+};
+use chia_wallet_sdk::types::{MAINNET_CONSTANTS, TESTNET11_CONSTANTS};
+use chia_wallet_sdk::utils::Address;
 use chia_wallet_sdk::{
-    connect_peer, create_native_tls_connector, decode_address, encode_address, load_ssl_cert,
-    Connector, DataStore as RustDataStore, DataStoreInfo as RustDataStoreInfo,
-    DataStoreMetadata as RustDataStoreMetadata, DelegatedPuzzle as RustDelegatedPuzzle,
-    Peer as RustPeer, PeerOptions, MAINNET_CONSTANTS, TESTNET11_CONSTANTS,
+    client::Peer as RustPeer,
+    driver::{
+        DataStore as RustDataStore, DataStoreInfo as RustDataStoreInfo,
+        DataStoreMetadata as RustDataStoreMetadata, DelegatedPuzzle as RustDelegatedPuzzle,
+    },
 };
 use conversions::{ConversionError, FromJs, ToJs};
 use js::{Coin, CoinSpend, CoinState, EveProof, Proof, ServerCoin};
@@ -1181,8 +1187,7 @@ pub fn secret_key_to_public_key(secret_key: Buffer) -> napi::Result<Buffer> {
 /// @returns {Promise<String>} The converted address.
 pub fn puzzle_hash_to_address(puzzle_hash: Buffer, prefix: String) -> napi::Result<String> {
     let puzzle_hash = RustBytes32::from_js(puzzle_hash)?;
-
-    encode_address(puzzle_hash.into(), &prefix).map_err(js::err)
+    Address::new(puzzle_hash, prefix).encode().map_err(js::err)
 }
 
 #[napi]
@@ -1191,10 +1196,10 @@ pub fn puzzle_hash_to_address(puzzle_hash: Buffer, prefix: String) -> napi::Resu
 /// @param {String} address - The address.
 /// @returns {Promise<Buffer>} The puzzle hash.
 pub fn address_to_puzzle_hash(address: String) -> napi::Result<Buffer> {
-    let (puzzle_hash, _) = decode_address(&address).map_err(js::err)?;
-    let puzzle_hash: RustBytes32 = RustBytes32::new(puzzle_hash);
-
-    puzzle_hash.to_js()
+    Address::decode(&address)
+        .map_err(js::err)?
+        .puzzle_hash
+        .to_js()
 }
 
 #[napi]
