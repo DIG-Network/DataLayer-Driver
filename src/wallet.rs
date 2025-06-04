@@ -1,67 +1,45 @@
 use std::collections::HashMap;
+use std::time::{SystemTime, UNIX_EPOCH};
 
-use chia::bls::sign;
-use chia::bls::verify;
-use chia::bls::PublicKey;
-use chia::bls::SecretKey;
-use chia::bls::Signature;
-use chia::clvm_traits::clvm_tuple;
-use chia::clvm_traits::FromClvm;
-use chia::clvm_traits::ToClvm;
+use chia::bls::{sign, verify, PublicKey, SecretKey, Signature};
+use chia::clvm_traits::{clvm_tuple, FromClvm, ToClvm};
 use chia::clvm_utils::tree_hash;
-use chia::consensus::consensus_constants::ConsensusConstants;
-use chia::consensus::gen::flags::DONT_VALIDATE_SIGNATURE;
-use chia::consensus::gen::{
-    flags::MEMPOOL_MODE, owned_conditions::OwnedSpendBundleConditions,
-    run_block_generator::run_block_generator, solution_generator::solution_generator,
-    validation_error::ValidationErr,
+use chia::consensus::{
+    consensus_constants::ConsensusConstants,
+    gen::{
+        flags::DONT_VALIDATE_SIGNATURE, flags::MEMPOOL_MODE,
+        owned_conditions::OwnedSpendBundleConditions, run_block_generator::run_block_generator,
+        solution_generator::solution_generator, validation_error::ValidationErr,
+    },
 };
-use chia::protocol::CoinState;
 use chia::protocol::{
-    Bytes, Bytes32, Coin, CoinSpend, CoinStateFilters, RejectHeaderRequest, RequestBlockHeader,
-    RequestFeeEstimates, RespondBlockHeader, RespondFeeEstimates, SpendBundle, TransactionAck,
+    Bytes, Bytes32, Coin, CoinSpend, CoinState, CoinStateFilters, RejectHeaderRequest,
+    RequestBlockHeader, RequestFeeEstimates, RespondBlockHeader, RespondFeeEstimates, SpendBundle,
+    TransactionAck,
 };
-use chia::puzzles::standard::StandardArgs;
-use chia::puzzles::standard::StandardSolution;
-use chia::puzzles::DeriveSynthetic;
+use chia::puzzles::{
+    standard::{StandardArgs, StandardSolution},
+    DeriveSynthetic,
+};
 use chia_puzzles::SINGLETON_LAUNCHER_HASH;
-use chia_wallet_sdk::client::ClientError;
-use chia_wallet_sdk::client::Peer;
-use chia_wallet_sdk::driver::get_merkle_tree;
-use chia_wallet_sdk::driver::DataStore;
-use chia_wallet_sdk::driver::DataStoreMetadata;
-use chia_wallet_sdk::driver::DelegatedPuzzle;
-use chia_wallet_sdk::driver::DriverError;
-use chia_wallet_sdk::driver::Launcher;
-use chia_wallet_sdk::driver::Layer;
-use chia_wallet_sdk::driver::OracleLayer;
-use chia_wallet_sdk::driver::SpendContext;
-use chia_wallet_sdk::driver::SpendWithConditions;
-use chia_wallet_sdk::driver::StandardLayer;
-use chia_wallet_sdk::driver::WriterLayer;
-use chia_wallet_sdk::prelude::CreateCoin;
-use chia_wallet_sdk::prelude::MeltSingleton;
-use chia_wallet_sdk::prelude::Memos;
-use chia_wallet_sdk::prelude::UpdateDataStoreMerkleRoot;
-use chia_wallet_sdk::signer::AggSigConstants;
-use chia_wallet_sdk::signer::RequiredSignature;
-use chia_wallet_sdk::signer::SignerError;
-use chia_wallet_sdk::types::announcement_id;
-use chia_wallet_sdk::types::Condition;
-use chia_wallet_sdk::types::Conditions;
-use chia_wallet_sdk::types::MAINNET_CONSTANTS;
-use chia_wallet_sdk::types::TESTNET11_CONSTANTS;
-use chia_wallet_sdk::utils;
-use chia_wallet_sdk::utils::CoinSelectionError;
+use chia_wallet_sdk::client::{ClientError, Peer};
+use chia_wallet_sdk::driver::{
+    get_merkle_tree, DataStore, DataStoreMetadata, DelegatedPuzzle, DriverError, Launcher, Layer,
+    OracleLayer, SpendContext, SpendWithConditions, StandardLayer, WriterLayer,
+};
+use chia_wallet_sdk::signer::{AggSigConstants, RequiredSignature, SignerError};
+use chia_wallet_sdk::types::{
+    announcement_id,
+    conditions::{CreateCoin, MeltSingleton, Memos, UpdateDataStoreMerkleRoot},
+    Condition, Conditions, MAINNET_CONSTANTS, TESTNET11_CONSTANTS,
+};
+use chia_wallet_sdk::utils::{self, CoinSelectionError};
 use clvmr::Allocator;
 use hex_literal::hex;
-use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 
 use crate::rust::ServerCoin;
-use crate::server_coin::urls_from_conditions;
-use crate::server_coin::MirrorArgs;
-use crate::server_coin::MirrorSolution;
+use crate::server_coin::{urls_from_conditions, MirrorArgs, MirrorSolution};
 
 /* echo -n 'datastore' | sha256sum */
 pub const DATASTORE_LAUNCHER_HINT: Bytes32 = Bytes32::new(hex!(
