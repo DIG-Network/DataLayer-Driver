@@ -445,7 +445,7 @@ export declare class Peer {
    * @param {Tls} tls - TLS connector.
    * @returns {Promise<Peer>} A new Peer instance.
    */
-  static new(nodeUri: string, tesntet: boolean, tls: Tls): Promise<Peer>
+  static new(nodeUri: string, testnet: boolean, tls: Tls): Promise<Peer>
   /**
    * Retrieves all coins that are unspent on the chain. Note that coins part of spend bundles that are pending in the mempool will also be included.
    *

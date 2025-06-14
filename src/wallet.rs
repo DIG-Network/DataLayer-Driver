@@ -1,53 +1,45 @@
 use std::collections::HashMap;
+use std::time::{SystemTime, UNIX_EPOCH};
 
-use chia::bls::sign;
-use chia::bls::verify;
-use chia::bls::PublicKey;
-use chia::bls::SecretKey;
-use chia::bls::Signature;
-use chia::clvm_traits::clvm_tuple;
-use chia::clvm_traits::FromClvm;
-use chia::clvm_traits::ToClvm;
+use chia::bls::{sign, verify, PublicKey, SecretKey, Signature};
+use chia::clvm_traits::{clvm_tuple, FromClvm, ToClvm};
 use chia::clvm_utils::tree_hash;
-use chia::clvm_utils::CurriedProgram;
-use chia::consensus::consensus_constants::ConsensusConstants;
-use chia::consensus::gen::flags::DONT_VALIDATE_SIGNATURE;
-use chia::consensus::gen::{
-    flags::MEMPOOL_MODE, owned_conditions::OwnedSpendBundleConditions,
-    run_block_generator::run_block_generator, solution_generator::solution_generator,
-    validation_error::ValidationErr,
+use chia::consensus::{
+    consensus_constants::ConsensusConstants,
+    gen::{
+        flags::DONT_VALIDATE_SIGNATURE, flags::MEMPOOL_MODE,
+        owned_conditions::OwnedSpendBundleConditions, run_block_generator::run_block_generator,
+        solution_generator::solution_generator, validation_error::ValidationErr,
+    },
 };
-use chia::protocol::CoinState;
 use chia::protocol::{
-    Bytes, Bytes32, Coin, CoinSpend, CoinStateFilters, RejectHeaderRequest, RequestBlockHeader,
-    RequestFeeEstimates, RespondBlockHeader, RespondFeeEstimates, SpendBundle, TransactionAck,
+    Bytes, Bytes32, Coin, CoinSpend, CoinState, CoinStateFilters, RejectHeaderRequest,
+    RequestBlockHeader, RequestFeeEstimates, RespondBlockHeader, RespondFeeEstimates, SpendBundle,
+    TransactionAck,
 };
-use chia::puzzles::singleton::SINGLETON_LAUNCHER_PUZZLE_HASH;
-use chia::puzzles::standard::StandardArgs;
-use chia::puzzles::standard::StandardSolution;
-use chia::puzzles::DeriveSynthetic;
-use chia_wallet_sdk::announcement_id;
-use chia_wallet_sdk::AggSigConstants;
-use chia_wallet_sdk::CreateCoin;
-use chia_wallet_sdk::Memos;
-use chia_wallet_sdk::SpendWithConditions;
-use chia_wallet_sdk::TESTNET11_CONSTANTS;
-use chia_wallet_sdk::{
-    get_merkle_tree, select_coins as select_coins_algo, ClientError, CoinSelectionError, Condition,
-    Conditions, DataStore, DataStoreMetadata, DelegatedPuzzle, DriverError, Launcher, Layer,
-    MeltSingleton, OracleLayer, Peer, RequiredSignature, SignerError, SpendContext, StandardLayer,
-    UpdateDataStoreMerkleRoot, WriterLayer, MAINNET_CONSTANTS,
+use chia::puzzles::{
+    standard::{StandardArgs, StandardSolution},
+    DeriveSynthetic,
 };
+use chia_puzzles::SINGLETON_LAUNCHER_HASH;
+use chia_wallet_sdk::client::{ClientError, Peer};
+use chia_wallet_sdk::driver::{
+    get_merkle_tree, DataStore, DataStoreMetadata, DelegatedPuzzle, DriverError, Launcher, Layer,
+    OracleLayer, SpendContext, SpendWithConditions, StandardLayer, WriterLayer,
+};
+use chia_wallet_sdk::signer::{AggSigConstants, RequiredSignature, SignerError};
+use chia_wallet_sdk::types::{
+    announcement_id,
+    conditions::{CreateCoin, MeltSingleton, Memos, UpdateDataStoreMerkleRoot},
+    Condition, Conditions, MAINNET_CONSTANTS, TESTNET11_CONSTANTS,
+};
+use chia_wallet_sdk::utils::{self, CoinSelectionError};
 use clvmr::Allocator;
 use hex_literal::hex;
-use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 
 use crate::rust::ServerCoin;
-use crate::server_coin::urls_from_conditions;
-use crate::server_coin::MirrorArgs;
-use crate::server_coin::MirrorExt;
-use crate::server_coin::MirrorSolution;
+use crate::server_coin::{urls_from_conditions, MirrorArgs, MirrorSolution};
 
 /* echo -n 'datastore' | sha256sum */
 pub const DATASTORE_LAUNCHER_HINT: Bytes32 = Bytes32::new(hex!(
@@ -166,7 +158,7 @@ pub async fn get_unspent_coin_states(
 }
 
 pub fn select_coins(coins: Vec<Coin>, total_amount: u64) -> Result<Vec<Coin>, CoinSelectionError> {
-    select_coins_algo(coins.into_iter().collect(), total_amount.into())
+    utils::select_coins(coins.into_iter().collect(), total_amount.into())
 }
 
 fn spend_coins_together(
@@ -327,12 +319,7 @@ pub async fn spend_server_coins(
 
     let mut ctx = SpendContext::new();
 
-    let mirror_puzzle = ctx.mirror_puzzle()?;
-
-    let puzzle_reveal = ctx.serialize(&CurriedProgram {
-        program: mirror_puzzle,
-        args: MirrorArgs::default(),
-    })?;
+    let puzzle_reveal = ctx.curry(MirrorArgs::default())?;
 
     let mut conditions = Conditions::new().reserve_fee(total_fee);
     let mut total_fee: i64 = total_fee.try_into().unwrap();
@@ -350,6 +337,8 @@ pub async fn spend_server_coins(
 
         let parent_inner_puzzle = ctx.curry(StandardArgs::new(synthetic_key))?;
 
+        let puzzle_reveal = ctx.serialize(&puzzle_reveal)?;
+
         let solution = ctx.serialize(&MirrorSolution {
             parent_parent_id: parent_coin.coin.parent_coin_info,
             parent_inner_puzzle,
@@ -362,7 +351,7 @@ pub async fn spend_server_coins(
         })?;
 
         total_fee -= i64::try_from(server_coin.amount).unwrap();
-        ctx.insert(CoinSpend::new(server_coin, puzzle_reveal.clone(), solution));
+        ctx.insert(CoinSpend::new(server_coin, puzzle_reveal, solution));
 
         conditions = conditions.assert_concurrent_spend(server_coin.coin_id());
     }
@@ -472,7 +461,7 @@ pub fn mint_store(
             .into_iter()
             .map(|cond| {
                 if let Condition::CreateCoin(cc) = cond {
-                    if cc.puzzle_hash == SINGLETON_LAUNCHER_PUZZLE_HASH.into() {
+                    if cc.puzzle_hash == SINGLETON_LAUNCHER_HASH.into() {
                         let hint = ctx.hint(DATASTORE_LAUNCHER_HINT)?;
 
                         return Ok(Condition::CreateCoin(CreateCoin {
@@ -560,7 +549,7 @@ pub async fn sync_store(
         };
 
         let new_store = DataStore::<DataStoreMetadata>::from_spend(
-            &mut ctx.allocator,
+            &mut ctx,
             &cs,
             &latest_store.info.delegated_puzzles,
         )
@@ -651,7 +640,7 @@ pub async fn sync_store_using_launcher_id(
         solution: puzzle_and_solution_req.solution,
     };
 
-    let first_store = DataStore::<DataStoreMetadata>::from_spend(&mut ctx.allocator, &cs, &[])
+    let first_store = DataStore::<DataStoreMetadata>::from_spend(&mut ctx, &cs, &[])
         .map_err(|_| WalletError::Parse)?
         .ok_or(WalletError::Parse)?;
 
@@ -756,12 +745,9 @@ fn update_store_with_conditions(
     let parent_delegated_puzzles = datastore.info.delegated_puzzles.clone();
     let new_spend = datastore.spend(ctx, inner_datastore_spend)?;
 
-    let new_datastore = DataStore::<DataStoreMetadata>::from_spend(
-        &mut ctx.allocator,
-        &new_spend,
-        &parent_delegated_puzzles,
-    )?
-    .ok_or(WalletError::Parse)?;
+    let new_datastore =
+        DataStore::<DataStoreMetadata>::from_spend(ctx, &new_spend, &parent_delegated_puzzles)?
+            .ok_or(WalletError::Parse)?;
 
     Ok(SuccessResponse {
         coin_spends: vec![new_spend],
@@ -798,7 +784,7 @@ pub fn update_store_ownership(
                     new_delegated_puzzles,
                 ),
             }
-            .to_clvm(&mut ctx.allocator)
+            .to_clvm(&mut **ctx)
             .map_err(DriverError::ToClvm)?;
 
             Condition::Other(new_merkle_root_condition)
@@ -870,7 +856,7 @@ pub fn melt_store(
         .with(Condition::reserve_fee(1))
         .with(Condition::Other(
             MeltSingleton {}
-                .to_clvm(&mut ctx.allocator)
+                .to_clvm(&mut **ctx)
                 .map_err(DriverError::ToClvm)?,
         ));
 
@@ -944,9 +930,8 @@ pub fn oracle_spend(
     let parent_delegated_puzzles = datastore.info.delegated_puzzles.clone();
     let new_spend = datastore.spend(ctx, inner_datastore_spend)?;
 
-    let new_datastore =
-        DataStore::from_spend(&mut ctx.allocator, &new_spend, &parent_delegated_puzzles)?
-            .ok_or(WalletError::Parse)?;
+    let new_datastore = DataStore::from_spend(ctx, &new_spend, &parent_delegated_puzzles)?
+        .ok_or(WalletError::Parse)?;
     ctx.insert(new_spend.clone());
 
     Ok(SuccessResponse {
@@ -1209,7 +1194,7 @@ pub async fn look_up_possible_launchers(
             .coin_states
             .into_iter()
             .filter_map(|coin_state| {
-                if coin_state.coin.puzzle_hash == SINGLETON_LAUNCHER_PUZZLE_HASH.into() {
+                if coin_state.coin.puzzle_hash == SINGLETON_LAUNCHER_HASH.into() {
                     Some(coin_state.coin.coin_id())
                 } else {
                     None

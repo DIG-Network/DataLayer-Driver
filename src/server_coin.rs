@@ -1,8 +1,11 @@
+use std::borrow::Cow;
+
 use chia::clvm_traits::{self, FromClvm, ToClvm};
 use chia::clvm_utils::{CurriedProgram, ToTreeHash, TreeHash};
 use chia::protocol::{Bytes, Bytes32, Coin};
-use chia_wallet_sdk::{Condition, CreateCoin, DriverError, SpendContext};
-use clvmr::{Allocator, NodePtr};
+use chia_wallet_sdk::prelude::CreateCoin;
+use chia_wallet_sdk::types::{Condition, Mod};
+use clvmr::Allocator;
 use hex_literal::hex;
 use num_bigint::BigInt;
 
@@ -35,13 +38,13 @@ impl MirrorArgs<i32> {
     }
 }
 
-pub trait MirrorExt {
-    fn mirror_puzzle(&mut self) -> Result<NodePtr, DriverError>;
-}
+impl<M> Mod for MirrorArgs<M> {
+    fn mod_hash() -> TreeHash {
+        MIRROR_PUZZLE_HASH
+    }
 
-impl MirrorExt for SpendContext {
-    fn mirror_puzzle(&mut self) -> Result<NodePtr, DriverError> {
-        self.puzzle(MIRROR_PUZZLE_HASH, &MIRROR_PUZZLE)
+    fn mod_reveal() -> Cow<'static, [u8]> {
+        Cow::Borrowed(&MIRROR_PUZZLE)
     }
 }
 
