@@ -913,19 +913,19 @@ impl Peer {
 }
 
 #[napi]
-pub struct Simulator {
-    inner: PeerSimulator,
+pub struct SimulatorWrapper {
+    inner: Arc<Mutex<chia_wallet_sdk::test::PeerSimulator>>,
 }
 
 #[napi]
-impl Simulator {
+impl SimulatorWrapper {
     #[napi(factory)]
     /// Creates a new blockchain simulator instance for testing.
     ///
-    /// @returns {Promise<Simulator>} A new Simulator instance.
+    /// @returns {Promise<SimulatorWrapper>} A new SimulatorWrapper instance.
     pub async fn new() -> napi::Result<Self> {
-        let simulator = PeerSimulator::new().await.map_err(js::err)?;
-        Ok(Self { inner: simulator })
+        let simulator = chia_wallet_sdk::test::PeerSimulator::new().await.map_err(js::err)?;
+        Ok(Self { inner: Arc::new(Mutex::new(simulator)) })
     }
 
     #[napi]
@@ -933,7 +933,7 @@ impl Simulator {
     ///
     /// @returns {Promise<Peer>} A new Peer instance connected to this simulator.
     pub async fn get_peer(&self) -> napi::Result<Peer> {
-        let (peer, mut receiver) = self.inner.connect_raw().await.map_err(js::err)?;
+        let (peer, mut receiver) = self.inner.lock().await.connect_raw().await.map_err(js::err)?;
         
         let inner = Arc::new(peer);
         let peak = Arc::new(Mutex::new(None));
@@ -978,6 +978,49 @@ impl Simulator {
             peak,
             coin_listeners,
         })
+    }
+
+    #[napi]
+    /// Creates a new coin with the specified puzzle hash and amount.
+    ///
+    /// @param {Buffer} puzzleHash - The puzzle hash for the new coin.
+    /// @param {BigInt} amount - The amount for the new coin.
+    /// @returns {Promise<Coin>} The newly created coin.
+    pub async fn new_coin(&self, puzzle_hash: Buffer, amount: BigInt) -> napi::Result<Coin> {
+        let puzzle_hash = RustBytes32::from_js(puzzle_hash)?;
+        let amount = u64::from_js(amount)?;
+        let coin = self.inner.lock().await.mint_coin(puzzle_hash, amount).await;
+        coin.to_js()
+    }
+
+    #[napi]
+    /// Gets the current height of the simulator.
+    ///
+    /// @returns {Promise<u32>} The current height.
+    pub async fn height(&self) -> napi::Result<u32> {
+        Ok(self.inner.lock().await.height().await)
+    }
+
+    #[napi]
+    /// Gets the coin state for a given coin ID.
+    ///
+    /// @param {Buffer} coinId - The coin ID to look up.
+    /// @returns {Promise<CoinState | null>} The coin state if found.
+    pub async fn coin_state(&self, coin_id: Buffer) -> napi::Result<Option<CoinState>> {
+        let coin_id = RustBytes32::from_js(coin_id)?;
+        match self.inner.lock().await.coin_state(coin_id).await {
+            Some(state) => Ok(Some(state.to_js()?)),
+            None => Ok(None),
+        }
+    }
+
+    #[napi]
+    /// Gets the header hash at the specified height.
+    ///
+    /// @param {u32} height - The height to get the header hash for.
+    /// @returns {Promise<Buffer>} The header hash.
+    pub async fn header_hash(&self, height: u32) -> napi::Result<Buffer> {
+        self.inner.lock().await.header_hash(height).await.to_js()
     }
 }
 

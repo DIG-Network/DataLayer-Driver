@@ -1,5 +1,5 @@
 const {
-    Simulator,
+    SimulatorWrapper,
     Peer,
     PeerType,
     Tls,
@@ -24,7 +24,7 @@ async function basicSimulatorExample() {
     try {
         // Create a new blockchain simulator
         console.log('Creating simulator...');
-        const simulator = await Simulator.new();
+        const simulator = await SimulatorWrapper.new();
         console.log('✓ Simulator created successfully');
 
         // Get a peer connection from the simulator
@@ -122,9 +122,9 @@ async function comparisonExample() {
     try {
         // New approach: Direct simulator creation
         console.log('New approach:');
-        const simulator = await Simulator.new();
+        const simulator = await SimulatorWrapper.new();
         const peerFromSimulator = await simulator.getPeer();
-        console.log('✓ Created peer via Simulator.new() -> getPeer()');
+        console.log('✓ Created peer via SimulatorWrapper.new() -> getPeer()');
 
         // Original approach: Peer with simulator type (requires TLS even for simulator)
         console.log('\nOriginal approach:');
@@ -155,7 +155,7 @@ async function errorHandlingExample() {
     console.log('\n=== Error Handling Example ===');
     
     try {
-        const simulator = await Simulator.new();
+        const simulator = await SimulatorWrapper.new();
         const peer = await simulator.getPeer();
         
         // Example of handling errors gracefully
@@ -184,10 +184,56 @@ async function errorHandlingExample() {
 }
 
 /**
+ * Example 6: Direct Simulator Manipulation
+ * Shows how to use the new simulator methods directly
+ */
+async function directSimulatorExample() {
+    console.log('\n=== Direct Simulator Manipulation Example ===');
+    
+    try {
+        const simulator = await SimulatorWrapper.new();
+        
+        // Get initial state
+        console.log('Initial height:', await simulator.height());
+        console.log('Header hash at height 0:', (await simulator.headerHash(0)).toString('hex'));
+        
+        // Create a new coin
+        const puzzleHash = Buffer.alloc(32, 0x33); // 32 bytes filled with 0x33
+        const amount = 1000000; // 1 XCH in mojos
+        
+        console.log('\nCreating new coin...');
+        const newCoin = await simulator.newCoin(puzzleHash, BigInt(amount));
+        console.log('Created coin:', {
+            parentCoinInfo: newCoin.parentCoinInfo.toString('hex'),
+            puzzleHash: newCoin.puzzleHash.toString('hex'),
+            amount: newCoin.amount.toString()
+        });
+        
+        // Check coin state using the new coin's ID
+        const coinId = getCoinId(newCoin);
+        console.log('Checking coin state for coin ID:', coinId.toString('hex'));
+        const coinState = await simulator.coinState(coinId);
+        console.log('Coin state lookup result:', coinState ? 'Found' : 'Not found');
+        if (coinState) {
+            console.log('  Coin amount:', coinState.coin.amount.toString());
+            console.log('  Created height:', coinState.createdHeight?.toString() || 'N/A');
+        }
+        
+        // Get height again to see if it changed
+        console.log('\nHeight after coin creation:', await simulator.height());
+        
+        return { simulator, newCoin };
+    } catch (error) {
+        console.error('Error in direct simulator example:', error);
+        throw error;
+    }
+}
+
+/**
  * Main function to run all examples
  */
 async function runAllExamples() {
-    console.log('🚀 PeerSimulator Examples');
+    console.log('🚀 SimulatorWrapper Examples');
     console.log('========================');
     
     try {
@@ -206,6 +252,9 @@ async function runAllExamples() {
         // Example 5: Error handling
         await errorHandlingExample();
         
+        // Example 6: Direct simulator manipulation
+        await directSimulatorExample();
+        
         console.log('\n✅ All examples completed successfully!');
         
     } catch (error) {
@@ -221,7 +270,7 @@ async function datastoreSimulatorExample() {
     console.log('\n=== Datastore Operations with Simulator ===');
     
     try {
-        const simulator = await Simulator.new();
+        const simulator = await SimulatorWrapper.new();
         const peer = await simulator.getPeer();
         const genesisChallenge = getTestnet11GenesisChallenge();
         
@@ -258,6 +307,7 @@ module.exports = {
     multiplePeerExample,
     comparisonExample,
     errorHandlingExample,
+    directSimulatorExample,
     datastoreSimulatorExample,
     runAllExamples
 };

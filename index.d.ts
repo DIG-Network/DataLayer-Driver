@@ -570,17 +570,45 @@ export declare class Peer {
    */
   waitForCoinToBeSpent(coinId: Buffer, lastHeight: number | undefined | null, headerHash: Buffer): Promise<Buffer>
 }
-export declare class Simulator {
+export declare class SimulatorWrapper {
   /**
    * Creates a new blockchain simulator instance for testing.
    *
-   * @returns {Promise<Simulator>} A new Simulator instance.
+   * @returns {Promise<SimulatorWrapper>} A new SimulatorWrapper instance.
    */
-  static new(): Promise<Simulator>
+  static new(): Promise<SimulatorWrapper>
   /**
    * Creates a new Peer connection from this simulator.
    *
    * @returns {Promise<Peer>} A new Peer instance connected to this simulator.
    */
   getPeer(): Promise<Peer>
+  /**
+   * Creates a new coin with the specified puzzle hash and amount.
+   *
+   * @param {Buffer} puzzleHash - The puzzle hash for the new coin.
+   * @param {BigInt} amount - The amount for the new coin.
+   * @returns {Promise<Coin>} The newly created coin.
+   */
+  newCoin(puzzleHash: Buffer, amount: bigint): Promise<Coin>
+  /**
+   * Gets the current height of the simulator.
+   *
+   * @returns {Promise<u32>} The current height.
+   */
+  height(): Promise<number>
+  /**
+   * Gets the coin state for a given coin ID.
+   *
+   * @param {Buffer} coinId - The coin ID to look up.
+   * @returns {Promise<CoinState | null>} The coin state if found.
+   */
+  coinState(coinId: Buffer): Promise<CoinState | null>
+  /**
+   * Gets the header hash at the specified height.
+   *
+   * @param {u32} height - The height to get the header hash for.
+   * @returns {Promise<Buffer>} The header hash.
+   */
+  headerHash(height: number): Promise<Buffer>
 }
