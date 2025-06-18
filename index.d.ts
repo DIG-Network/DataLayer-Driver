@@ -570,3 +570,17 @@ export declare class Peer {
    */
   waitForCoinToBeSpent(coinId: Buffer, lastHeight: number | undefined | null, headerHash: Buffer): Promise<Buffer>
 }
+export declare class Simulator {
+  /**
+   * Creates a new blockchain simulator instance for testing.
+   *
+   * @returns {Promise<Simulator>} A new Simulator instance.
+   */
+  static new(): Promise<Simulator>
+  /**
+   * Creates a new Peer connection from this simulator.
+   *
+   * @returns {Promise<Peer>} A new Peer instance connected to this simulator.
+   */
+  getPeer(): Promise<Peer>
+}

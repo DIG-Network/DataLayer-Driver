@@ -912,6 +912,75 @@ impl Peer {
     }
 }
 
+#[napi]
+pub struct Simulator {
+    inner: PeerSimulator,
+}
+
+#[napi]
+impl Simulator {
+    #[napi(factory)]
+    /// Creates a new blockchain simulator instance for testing.
+    ///
+    /// @returns {Promise<Simulator>} A new Simulator instance.
+    pub async fn new() -> napi::Result<Self> {
+        let simulator = PeerSimulator::new().await.map_err(js::err)?;
+        Ok(Self { inner: simulator })
+    }
+
+    #[napi]
+    /// Creates a new Peer connection from this simulator.
+    ///
+    /// @returns {Promise<Peer>} A new Peer instance connected to this simulator.
+    pub async fn get_peer(&self) -> napi::Result<Peer> {
+        let (peer, mut receiver) = self.inner.connect_raw().await.map_err(js::err)?;
+        
+        let inner = Arc::new(peer);
+        let peak = Arc::new(Mutex::new(None));
+        let coin_listeners = Arc::new(Mutex::new(
+            HashMap::<RustBytes32, UnboundedSender<()>>::new(),
+        ));
+
+        let peak_clone = peak.clone();
+        let coin_listeners_clone = coin_listeners.clone();
+        tokio::spawn(async move {
+            while let Some(message) = receiver.recv().await {
+                if message.msg_type == ProtocolMessageTypes::NewPeakWallet {
+                    if let Ok(new_peak) = NewPeakWallet::from_bytes(&message.data) {
+                        let mut peak_guard = peak_clone.lock().await;
+                        *peak_guard = Some(new_peak);
+                    }
+                }
+
+                if message.msg_type == ProtocolMessageTypes::CoinStateUpdate {
+                    if let Ok(coin_state_update) = CoinStateUpdate::from_bytes(&message.data) {
+                        let mut listeners = coin_listeners_clone.lock().await;
+
+                        for coin_state_update_item in coin_state_update.items {
+                            if coin_state_update_item.spent_height.is_none() {
+                                continue;
+                            }
+
+                            if let Some(listener) =
+                                listeners.get(&coin_state_update_item.coin.coin_id())
+                            {
+                                let _ = listener.send(());
+                                listeners.remove(&coin_state_update_item.coin.coin_id());
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        Ok(Peer {
+            inner,
+            peak,
+            coin_listeners,
+        })
+    }
+}
+
 /// Selects coins using the knapsack algorithm.
 ///
 /// @param {Vec<Coin>} allCoins - Array of available coins (coins to select from).
