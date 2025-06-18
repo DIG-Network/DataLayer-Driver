@@ -20,7 +20,7 @@ chia-puzzles = "0.20.1"
 thiserror = "1.0.61"
 clvmr = "0.13.1"
 tokio = "1.39.3"
-chia-wallet-sdk = { version = "0.24.0", features = ["chip-0035", "native-tls"] }
+chia-wallet-sdk = { version = "0.24.0", features = ["chip-0035", "native-tls", "peer-simulator"] }
 hex-literal = "0.4.1"
 num-bigint = "0.4.6"
 hex = "0.4.3"
