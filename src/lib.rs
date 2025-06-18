@@ -498,21 +498,20 @@ impl Peer {
             receiver = r;
         } else {
             let (p, r) = connect_peer(
-                    peer_type.as_str().to_string(),
-                    tls.0.clone(),
-                    if let Ok(socket_addr) = node_uri.parse::<SocketAddr>() {
-                        socket_addr
-                    } else {
-                        return Err(js::err(ConversionError::InvalidUri(node_uri)));
-                    },
-                    PeerOptions::default(),
-                )
-                .await
-                .map_err(js::err)?;
+                peer_type.as_str().to_string(),
+                tls.0.clone(),
+                if let Ok(socket_addr) = node_uri.parse::<SocketAddr>() {
+                    socket_addr
+                } else {
+                    return Err(js::err(ConversionError::InvalidUri(node_uri)));
+                },
+                PeerOptions::default(),
+            )
+            .await
+            .map_err(js::err)?;
             peer = p;
             receiver = r;
         }
-        
 
         let inner = Arc::new(peer);
         let peak = Arc::new(Mutex::new(None));
