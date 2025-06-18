@@ -190,6 +190,11 @@ export interface PossibleLaunchersResponse {
   lastHeight: number
   lastHeaderHash: Buffer
 }
+export const enum PeerType {
+  Mainnet = 0,
+  Testnet11 = 1,
+  Simulator = 2
+}
 /**
  * Selects coins using the knapsack algorithm.
  *
@@ -441,11 +446,11 @@ export declare class Peer {
    * Creates a new Peer instance.
    *
    * @param {String} nodeUri - URI of the node (e.g., '127.0.0.1:58444').
-   * @param {bool} testnet - True for connecting to testnet11, false for mainnet.
+   * @param {PeerType} peerType - Network type: 'mainnet', 'testnet11', or 'simulator'.
    * @param {Tls} tls - TLS connector.
    * @returns {Promise<Peer>} A new Peer instance.
    */
-  static new(nodeUri: string, testnet: boolean, tls: Tls): Promise<Peer>
+  static new(nodeUri: string, peerType: PeerType, tls: Tls): Promise<Peer>
   /**
    * Retrieves all coins that are unspent on the chain. Note that coins part of spend bundles that are pending in the mempool will also be included.
    *

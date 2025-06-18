@@ -20,6 +20,7 @@ use chia::traits::Streamable;
 use chia_wallet_sdk::client::{
     connect_peer, create_native_tls_connector, load_ssl_cert, Connector, PeerOptions,
 };
+use chia_wallet_sdk::test::PeerSimulator;
 use chia_wallet_sdk::types::{MAINNET_CONSTANTS, TESTNET11_CONSTANTS};
 use chia_wallet_sdk::utils::Address;
 use chia_wallet_sdk::{
@@ -462,31 +463,55 @@ pub struct Peer {
 }
 
 #[napi]
+#[derive(PartialEq, Eq)]
+pub enum PeerType {
+    Mainnet,
+    Testnet11,
+    Simulator,
+}
+
+impl PeerType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            PeerType::Mainnet => "mainnet",
+            PeerType::Testnet11 => "testnet11",
+            PeerType::Simulator => "simulator",
+        }
+    }
+}
+
+#[napi]
 impl Peer {
     #[napi(factory)]
     /// Creates a new Peer instance.
     ///
     /// @param {String} nodeUri - URI of the node (e.g., '127.0.0.1:58444').
-    /// @param {bool} testnet - True for connecting to testnet11, false for mainnet.
+    /// @param {PeerType} peerType - Network type: 'mainnet', 'testnet11', or 'simulator'.
     /// @param {Tls} tls - TLS connector.
     /// @returns {Promise<Peer>} A new Peer instance.
-    pub async fn new(node_uri: String, testnet: bool, tls: &Tls) -> napi::Result<Self> {
-        let (peer, mut receiver) = connect_peer(
-            if testnet {
-                "testnet11".to_string()
-            } else {
-                "mainnet".to_string()
-            },
-            tls.0.clone(),
-            if let Ok(socket_addr) = node_uri.parse::<SocketAddr>() {
-                socket_addr
-            } else {
-                return Err(js::err(ConversionError::InvalidUri(node_uri)));
-            },
-            PeerOptions::default(),
-        )
-        .await
-        .map_err(js::err)?;
+    pub async fn new(node_uri: String, peer_type: PeerType, tls: &Tls) -> napi::Result<Self> {
+        let (peer, mut receiver);
+        if peer_type == PeerType::Simulator {
+            let sim = PeerSimulator::new().await.map_err(js::err)?;
+            let (p, r) = sim.connect_raw().await.map_err(js::err)?;
+            peer = p;
+            receiver = r;
+        } else {
+            let (p, r) = connect_peer(
+                peer_type.as_str().to_string(),
+                tls.0.clone(),
+                if let Ok(socket_addr) = node_uri.parse::<SocketAddr>() {
+                    socket_addr
+                } else {
+                    return Err(js::err(ConversionError::InvalidUri(node_uri)));
+                },
+                PeerOptions::default(),
+            )
+            .await
+            .map_err(js::err)?;
+            peer = p;
+            receiver = r;
+        }
 
         let inner = Arc::new(peer);
         let peak = Arc::new(Mutex::new(None));
