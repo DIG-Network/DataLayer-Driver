@@ -310,7 +310,7 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { newLineageProof, newEveProof, Tls, Peer, PeerType, selectCoins, sendXch, morphLauncherId, createServerCoin, mintStore, oracleSpend, addFee, masterPublicKeyToWalletSyntheticKey, masterPublicKeyToFirstPuzzleHash, masterSecretKeyToWalletSyntheticSecretKey, secretKeyToPublicKey, puzzleHashToAddress, addressToPuzzleHash, adminDelegatedPuzzleFromKey, writerDelegatedPuzzleFromKey, oracleDelegatedPuzzle, signCoinSpends, getCoinId, updateStoreMetadata, updateStoreOwnership, meltStore, signMessage, verifySignedMessage, syntheticKeyToPuzzleHash, getCost, getMainnetGenesisChallenge, getTestnet11GenesisChallenge } = nativeBinding
+const { newLineageProof, newEveProof, Tls, Peer, PeerType, selectCoins, sendXch, morphLauncherId, createServerCoin, mintStore, oracleSpend, addFee, masterPublicKeyToWalletSyntheticKey, masterPublicKeyToFirstPuzzleHash, masterSecretKeyToWalletSyntheticSecretKey, secretKeyToPublicKey, puzzleHashToAddress, addressToPuzzleHash, adminDelegatedPuzzleFromKey, writerDelegatedPuzzleFromKey, oracleDelegatedPuzzle, signCoinSpends, getCoinId, updateStoreMetadata, updateStoreOwnership, meltStore, signMessage, verifySignedMessage, syntheticKeyToPuzzleHash, getCost, getMainnetGenesisChallenge, getTestnet11GenesisChallenge, simulatorNewPuzzle, simulatorNewBlspair, simulatorNewProgram } = nativeBinding
 
 module.exports.newLineageProof = newLineageProof
 module.exports.newEveProof = newEveProof
@@ -344,3 +344,6 @@ module.exports.syntheticKeyToPuzzleHash = syntheticKeyToPuzzleHash
 module.exports.getCost = getCost
 module.exports.getMainnetGenesisChallenge = getMainnetGenesisChallenge
 module.exports.getTestnet11GenesisChallenge = getTestnet11GenesisChallenge
+module.exports.simulatorNewPuzzle = simulatorNewPuzzle
+module.exports.simulatorNewBlspair = simulatorNewBlspair
+module.exports.simulatorNewProgram = simulatorNewProgram

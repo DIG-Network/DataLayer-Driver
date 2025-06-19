@@ -83,6 +83,16 @@ export interface ServerCoin {
   p2PuzzleHash: Buffer
   memoUrls: Array<string>
 }
+/** Object returned by simulator_new_puzzle, containing both the puzzle hash and the puzzle reveal. */
+export interface SimulatorPuzzle {
+  puzzleHash: Buffer
+  puzzleReveal: Buffer
+}
+export interface BlsPair {
+  sk: Buffer
+  pk: Buffer
+  puzzleHash: Buffer
+}
 /**
  * Creates a new lineage proof.
  *
@@ -432,6 +442,26 @@ export declare function getMainnetGenesisChallenge(): Buffer
  * @returns {Buffer} The testnet11 genesis challenge.
  */
 export declare function getTestnet11GenesisChallenge(): Buffer
+/**
+ * Creates a new puzzle and its hash using the simulator.
+ *
+ * @param {BigInt} value - The value to use for the puzzle.
+ * @returns {Promise<js::SimulatorPuzzle>} The puzzle hash and reveal.
+ */
+export declare function simulatorNewPuzzle(value: bigint): Promise<SimulatorPuzzle>
+/**
+ * Creates a new BlsPair.
+ *
+ * @param {BigInt} value - The value to use to initialize the pair.
+ * @returns {Promise<js::BlsPair>} The BlsPair.
+ */
+export declare function simulatorNewBlspair(value: bigint): BlsPair
+/**
+ * Creates a new simulator program.
+ *
+ * @returns {Promise<Buffer>} The program.
+ */
+export declare function simulatorNewProgram(pk: Buffer): Buffer
 export declare class Tls {
   /**
    * Creates a new TLS connector.
@@ -460,6 +490,34 @@ export declare class Peer {
    * @returns {Promise<UnspentCoinsResponse>} The unspent coins response.
    */
   getAllUnspentCoins(puzzleHash: Buffer, previousHeight: number | undefined | null, previousHeaderHash: Buffer): Promise<UnspentCoinsResponse>
+  /**
+   * Creates a new coin with the specified puzzle hash and amount using the simulator.
+   *
+   * @param {Buffer} puzzleHash - The puzzle hash for the new coin.
+   * @param {BigInt} amount - The amount for the new coin.
+   * @returns {Promise<Coin>} The newly created coin.
+   */
+  simulatorNewCoin(puzzleHash: Buffer, amount: bigint): Promise<Coin>
+  /**
+   * Gets the current height of the simulator.
+   *
+   * @returns {Promise<u32>} The current height.
+   */
+  simulatorHeight(): Promise<number>
+  /**
+   * Gets the coin state for a given coin ID.
+   *
+   * @param {Buffer} coinId - The coin ID to look up.
+   * @returns {Promise<CoinState | null>} The coin state if found.
+   */
+  simulatorCoinState(coinId: Buffer): Promise<CoinState | null>
+  /**
+   * Gets the header hash at the specified height.
+   *
+   * @param {u32} height - The height to get the header hash for.
+   * @returns {Promise<Buffer>} The header hash.
+   */
+  headerHash(height: number): Promise<Buffer>
   /**
    * Retrieves all hinted coin states that are unspent on the chain. Note that coins part of spend bundles that are pending in the mempool will also be included.
    *

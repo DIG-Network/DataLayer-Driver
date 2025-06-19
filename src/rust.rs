@@ -1,5 +1,6 @@
 pub use crate::server_coin::ServerCoin;
 use crate::UnspentCoinStates;
+use chia::bls::{PublicKey, SecretKey};
 pub use chia::protocol::*;
 pub use chia::puzzles::{EveProof, LineageProof, Proof};
 
@@ -21,4 +22,15 @@ impl From<UnspentCoinStates> for UnspentCoinsResponse {
             last_header_hash: unspent_coin_states.last_header_hash,
         }
     }
+}
+
+pub struct SimulatorPuzzle {
+    pub puzzle_hash: Bytes32,
+    pub puzzle_reveal: Program,
+}
+
+pub struct BlsPair {
+    pub sk: SecretKey,
+    pub pk: PublicKey,
+    pub puzzle_hash: Bytes32,
 }

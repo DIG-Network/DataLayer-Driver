@@ -86,6 +86,20 @@ pub struct ServerCoin {
     pub memo_urls: Vec<String>,
 }
 
+#[napi(object)]
+/// Object returned by simulator_new_puzzle, containing both the puzzle hash and the puzzle reveal.
+pub struct SimulatorPuzzle {
+    pub puzzle_hash: Buffer,
+    pub puzzle_reveal: Buffer,
+}
+
+#[napi(object)]
+pub struct BlsPair {
+    pub sk: Buffer,
+    pub pk: Buffer,
+    pub puzzle_hash: Buffer,
+}
+
 pub fn err<T>(error: T) -> napi::Error
 where
     T: ToString,
