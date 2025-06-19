@@ -13,7 +13,7 @@ use chia::bls::{
 
 use chia::protocol::{
     Bytes as RustBytes, Bytes32 as RustBytes32, Coin as RustCoin, CoinSpend as RustCoinSpend,
-    CoinStateUpdate, NewPeakWallet, Program, ProtocolMessageTypes, SpendBundle as RustSpendBundle,
+    CoinStateUpdate, NewPeakWallet, ProtocolMessageTypes, SpendBundle as RustSpendBundle,
 };
 use chia::puzzles::{standard::StandardArgs, DeriveSynthetic, Proof as RustProof};
 use chia::traits::Streamable;
@@ -609,6 +609,46 @@ impl Peer {
                 let coin = sim.lock().await.mint_coin(puzzle_hash, amount).await;
                 coin.to_js()
             }
+            None => Err(js::err("Simulator is not available for this peer type")),
+        }
+    }
+
+    #[napi]
+    /// Gets the current height of the simulator.
+    ///
+    /// @returns {Promise<u32>} The current height.
+    pub async fn simulator_height(&self) -> napi::Result<u32> {
+        match &self.sim {
+            Some(sim) => Ok(sim.lock().await.height().await),
+            None => Err(js::err("Simulator is not available for this peer type")),
+        }
+    }
+
+    #[napi]
+    /// Gets the coin state for a given coin ID.
+    ///
+    /// @param {Buffer} coinId - The coin ID to look up.
+    /// @returns {Promise<CoinState | null>} The coin state if found.
+    pub async fn simulator_coin_state(&self, coin_id: Buffer) -> napi::Result<Option<CoinState>> {
+        let coin_id = RustBytes32::from_js(coin_id)?;
+
+        match &self.sim {
+            Some(sim) => match sim.lock().await.coin_state(coin_id).await {
+                Some(state) => Ok(Some(state.to_js()?)),
+                None => Ok(None),
+            },
+            None => Err(js::err("Simulator is not available for this peer type")),
+        }
+    }
+
+    #[napi]
+    /// Gets the header hash at the specified height.
+    ///
+    /// @param {u32} height - The height to get the header hash for.
+    /// @returns {Promise<Buffer>} The header hash.
+    pub async fn header_hash(&self, height: u32) -> napi::Result<Buffer> {
+        match &self.sim {
+            Some(sim) => sim.lock().await.header_hash(height).await.to_js(),
             None => Err(js::err("Simulator is not available for this peer type")),
         }
     }

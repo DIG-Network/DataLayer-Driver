@@ -499,6 +499,26 @@ export declare class Peer {
    */
   simulatorNewCoin(puzzleHash: Buffer, amount: bigint): Promise<Coin>
   /**
+   * Gets the current height of the simulator.
+   *
+   * @returns {Promise<u32>} The current height.
+   */
+  simulatorHeight(): Promise<number>
+  /**
+   * Gets the coin state for a given coin ID.
+   *
+   * @param {Buffer} coinId - The coin ID to look up.
+   * @returns {Promise<CoinState | null>} The coin state if found.
+   */
+  simulatorCoinState(coinId: Buffer): Promise<CoinState | null>
+  /**
+   * Gets the header hash at the specified height.
+   *
+   * @param {u32} height - The height to get the header hash for.
+   * @returns {Promise<Buffer>} The header hash.
+   */
+  headerHash(height: number): Promise<Buffer>
+  /**
    * Retrieves all hinted coin states that are unspent on the chain. Note that coins part of spend bundles that are pending in the mempool will also be included.
    *
    * @param {Buffer} puzzleHash - Puzzle hash to lookup hinted coins for.
