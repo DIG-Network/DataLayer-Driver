@@ -83,6 +83,11 @@ export interface ServerCoin {
   p2PuzzleHash: Buffer
   memoUrls: Array<string>
 }
+/** Object returned by simulator_new_puzzle, containing both the puzzle hash and the puzzle reveal. */
+export interface SimulatorPuzzle {
+  puzzleHash: Buffer
+  puzzleReveal: Buffer
+}
 /**
  * Creates a new lineage proof.
  *
@@ -460,6 +465,21 @@ export declare class Peer {
    * @returns {Promise<UnspentCoinsResponse>} The unspent coins response.
    */
   getAllUnspentCoins(puzzleHash: Buffer, previousHeight: number | undefined | null, previousHeaderHash: Buffer): Promise<UnspentCoinsResponse>
+  /**
+   * Creates a new coin with the specified puzzle hash and amount using the simulator.
+   *
+   * @param {Buffer} puzzleHash - The puzzle hash for the new coin.
+   * @param {BigInt} amount - The amount for the new coin.
+   * @returns {Promise<Coin>} The newly created coin.
+   */
+  simulatorNewCoin(puzzleHash: Buffer, amount: bigint): Promise<Coin>
+  /**
+   * Creates a new puzzle and its hash using the simulator.
+   *
+   * @param {BigInt} value - The value to use for the puzzle.
+   * @returns {Promise<js::SimulatorPuzzle>} The puzzle hash and reveal.
+   */
+  simulatorNewPuzzle(value: bigint): Promise<SimulatorPuzzle>
   /**
    * Retrieves all hinted coin states that are unspent on the chain. Note that coins part of spend bundles that are pending in the mempool will also be included.
    *

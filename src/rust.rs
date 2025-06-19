@@ -22,3 +22,8 @@ impl From<UnspentCoinStates> for UnspentCoinsResponse {
         }
     }
 }
+
+pub struct SimulatorPuzzle {
+    pub puzzle_hash: Bytes32,
+    pub puzzle_reveal: Program,
+}
