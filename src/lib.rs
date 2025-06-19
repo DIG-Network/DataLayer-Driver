@@ -12,7 +12,8 @@ use chia::bls::{
 };
 
 use chia::protocol::{
-    Bytes as RustBytes, Bytes32 as RustBytes32, Coin as RustCoin, CoinSpend as RustCoinSpend, CoinStateUpdate, NewPeakWallet, Program, ProtocolMessageTypes, SpendBundle as RustSpendBundle
+    Bytes as RustBytes, Bytes32 as RustBytes32, Coin as RustCoin, CoinSpend as RustCoinSpend,
+    CoinStateUpdate, NewPeakWallet, Program, ProtocolMessageTypes, SpendBundle as RustSpendBundle,
 };
 use chia::puzzles::{standard::StandardArgs, DeriveSynthetic, Proof as RustProof};
 use chia::traits::Streamable;
@@ -20,7 +21,7 @@ use chia_wallet_sdk::client::{
     connect_peer, create_native_tls_connector, load_ssl_cert, Connector, PeerOptions,
 };
 use chia_wallet_sdk::prelude::AggSigMe;
-use chia_wallet_sdk::test::{ to_program, to_puzzle, PeerSimulator };
+use chia_wallet_sdk::test::{to_program, to_puzzle, PeerSimulator};
 use chia_wallet_sdk::types::{MAINNET_CONSTANTS, TESTNET11_CONSTANTS};
 use chia_wallet_sdk::utils::Address;
 use chia_wallet_sdk::{
@@ -463,7 +464,6 @@ pub struct Peer {
     sim: Option<Arc<Mutex<PeerSimulator>>>,
 }
 
-
 #[napi]
 #[derive(PartialEq, Eq)]
 pub enum PeerType {
@@ -597,55 +597,20 @@ impl Peer {
     /// @param {Buffer} puzzleHash - The puzzle hash for the new coin.
     /// @param {BigInt} amount - The amount for the new coin.
     /// @returns {Promise<Coin>} The newly created coin.
-    pub async fn simulator_new_coin(&self, puzzle_hash: Buffer, amount: BigInt) -> napi::Result<Coin> {
+    pub async fn simulator_new_coin(
+        &self,
+        puzzle_hash: Buffer,
+        amount: BigInt,
+    ) -> napi::Result<Coin> {
         let puzzle_hash = RustBytes32::from_js(puzzle_hash)?;
         let amount = u64::from_js(amount)?;
         match &self.sim {
             Some(sim) => {
                 let coin = sim.lock().await.mint_coin(puzzle_hash, amount).await;
                 coin.to_js()
-            },
+            }
             None => Err(js::err("Simulator is not available for this peer type")),
         }
-    }
-
-    #[napi]
-    /// Creates a new puzzle and its hash using the simulator.
-    ///
-    /// @param {BigInt} value - The value to use for the puzzle.
-    /// @returns {Promise<js::SimulatorPuzzle>} The puzzle hash and reveal.
-    pub async fn simulator_new_puzzle(&self, value: BigInt) -> napi::Result<js::SimulatorPuzzle> {
-        let value = u64::from_js(value)?;
-        let (puzzle_hash, puzzle_reveal) = to_puzzle(value).map_err(js::err)?;
-        Ok(js::SimulatorPuzzle {
-            puzzle_hash: puzzle_hash.to_js()?,
-            puzzle_reveal: puzzle_reveal.to_js()?,
-        })
-    }
-
-    #[napi]
-    /// Creates a new BlsPair.
-    ///
-    /// @param {BigInt} value - The value to use to initialize the pair.
-    /// @returns {Promise<js::BlsPair>} The BlsPair.
-    pub fn simulator_new_blspair(&self, value: BigInt) -> napi::Result<js::BlsPair> {
-        let value = u64::from_js(value)?;
-        let pair = chia_wallet_sdk::test::BlsPair::new(value);
-        Ok(js::BlsPair {
-            puzzle_hash: pair.puzzle_hash.to_js()?,
-            sk: pair.sk.to_js()?,
-            pk: pair.pk.to_js()?,
-        })
-    }
-
-    #[napi]
-    /// Creates a new simulator program.
-    ///
-    /// @returns {Promise<Buffer>} The program.
-    pub fn simulator_new_program(&self, pk: Buffer) -> napi::Result<Buffer> {
-        let pk = RustPublicKey::from_js(pk)?;
-        let program = to_program([AggSigMe::new(pk, b"Hello, world!".to_vec().into())]).map_err(js::err)?;
-        Ok(program.to_js()?)
     }
 
     #[napi]
@@ -1571,4 +1536,44 @@ pub fn get_mainnet_genesis_challenge() -> napi::Result<Buffer> {
 /// @returns {Buffer} The testnet11 genesis challenge.
 pub fn get_testnet11_genesis_challenge() -> napi::Result<Buffer> {
     TESTNET11_CONSTANTS.genesis_challenge.to_js()
+}
+
+#[napi]
+/// Creates a new puzzle and its hash using the simulator.
+///
+/// @param {BigInt} value - The value to use for the puzzle.
+/// @returns {Promise<js::SimulatorPuzzle>} The puzzle hash and reveal.
+pub async fn simulator_new_puzzle(value: BigInt) -> napi::Result<js::SimulatorPuzzle> {
+    let value = u64::from_js(value)?;
+    let (puzzle_hash, puzzle_reveal) = to_puzzle(value).map_err(js::err)?;
+    Ok(js::SimulatorPuzzle {
+        puzzle_hash: puzzle_hash.to_js()?,
+        puzzle_reveal: puzzle_reveal.to_js()?,
+    })
+}
+
+#[napi]
+/// Creates a new BlsPair.
+///
+/// @param {BigInt} value - The value to use to initialize the pair.
+/// @returns {Promise<js::BlsPair>} The BlsPair.
+pub fn simulator_new_blspair(value: BigInt) -> napi::Result<js::BlsPair> {
+    let value = u64::from_js(value)?;
+    let pair = chia_wallet_sdk::test::BlsPair::new(value);
+    Ok(js::BlsPair {
+        puzzle_hash: pair.puzzle_hash.to_js()?,
+        sk: pair.sk.to_js()?,
+        pk: pair.pk.to_js()?,
+    })
+}
+
+#[napi]
+/// Creates a new simulator program.
+///
+/// @returns {Promise<Buffer>} The program.
+pub fn simulator_new_program(pk: Buffer) -> napi::Result<Buffer> {
+    let pk = RustPublicKey::from_js(pk)?;
+    let program =
+        to_program([AggSigMe::new(pk, b"Hello, world!".to_vec().into())]).map_err(js::err)?;
+    Ok(program.to_js()?)
 }

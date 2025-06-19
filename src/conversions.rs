@@ -159,7 +159,6 @@ impl ToJs<js::Coin> for rust::Coin {
     }
 }
 
-
 impl FromJs<js::SimulatorPuzzle> for rust::SimulatorPuzzle {
     fn from_js(value: js::SimulatorPuzzle) -> Result<Self> {
         Ok(Self {

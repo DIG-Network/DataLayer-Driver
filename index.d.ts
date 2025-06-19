@@ -442,6 +442,26 @@ export declare function getMainnetGenesisChallenge(): Buffer
  * @returns {Buffer} The testnet11 genesis challenge.
  */
 export declare function getTestnet11GenesisChallenge(): Buffer
+/**
+ * Creates a new puzzle and its hash using the simulator.
+ *
+ * @param {BigInt} value - The value to use for the puzzle.
+ * @returns {Promise<js::SimulatorPuzzle>} The puzzle hash and reveal.
+ */
+export declare function simulatorNewPuzzle(value: bigint): Promise<SimulatorPuzzle>
+/**
+ * Creates a new BlsPair.
+ *
+ * @param {BigInt} value - The value to use to initialize the pair.
+ * @returns {Promise<js::BlsPair>} The BlsPair.
+ */
+export declare function simulatorNewBlspair(value: bigint): BlsPair
+/**
+ * Creates a new simulator program.
+ *
+ * @returns {Promise<Buffer>} The program.
+ */
+export declare function simulatorNewProgram(pk: Buffer): Buffer
 export declare class Tls {
   /**
    * Creates a new TLS connector.
@@ -478,26 +498,6 @@ export declare class Peer {
    * @returns {Promise<Coin>} The newly created coin.
    */
   simulatorNewCoin(puzzleHash: Buffer, amount: bigint): Promise<Coin>
-  /**
-   * Creates a new puzzle and its hash using the simulator.
-   *
-   * @param {BigInt} value - The value to use for the puzzle.
-   * @returns {Promise<js::SimulatorPuzzle>} The puzzle hash and reveal.
-   */
-  simulatorNewPuzzle(value: bigint): Promise<SimulatorPuzzle>
-  /**
-   * Creates a new BlsPair.
-   *
-   * @param {BigInt} value - The value to use to initialize the pair.
-   * @returns {Promise<js::BlsPair>} The BlsPair.
-   */
-  simulatorNewBlspair(value: bigint): BlsPair
-  /**
-   * Creates a new simulator program.
-   *
-   * @returns {Promise<Buffer>} The program.
-   */
-  simulatorNewProgram(pk: Buffer): Buffer
   /**
    * Retrieves all hinted coin states that are unspent on the chain. Note that coins part of spend bundles that are pending in the mempool will also be included.
    *
