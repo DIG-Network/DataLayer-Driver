@@ -178,6 +178,26 @@ impl ToJs<js::SimulatorPuzzle> for rust::SimulatorPuzzle {
     }
 }
 
+impl FromJs<js::BlsPair> for rust::BlsPair {
+    fn from_js(value: js::BlsPair) -> Result<Self> {
+        Ok(Self {
+            puzzle_hash: Bytes32::from_js(value.puzzle_hash)?,
+            pk: PublicKey::from_js(value.pk)?,
+            sk: SecretKey::from_js(value.sk)?,
+        })
+    }
+}
+
+impl ToJs<js::BlsPair> for rust::BlsPair {
+    fn to_js(&self) -> Result<js::BlsPair> {
+        Ok(js::BlsPair {
+            puzzle_hash: self.puzzle_hash.to_js()?,
+            pk: self.pk.to_js()?,
+            sk: self.sk.to_js()?,
+        })
+    }
+}
+
 impl FromJs<js::CoinState> for rust::CoinState {
     fn from_js(value: js::CoinState) -> Result<Self> {
         Ok(Self {

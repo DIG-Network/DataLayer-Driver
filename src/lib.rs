@@ -19,7 +19,7 @@ use chia::traits::Streamable;
 use chia_wallet_sdk::client::{
     connect_peer, create_native_tls_connector, load_ssl_cert, Connector, PeerOptions,
 };
-use chia_wallet_sdk::test::{ PeerSimulator, to_puzzle };
+use chia_wallet_sdk::test::{ to_puzzle, PeerSimulator };
 use chia_wallet_sdk::types::{MAINNET_CONSTANTS, TESTNET11_CONSTANTS};
 use chia_wallet_sdk::utils::Address;
 use chia_wallet_sdk::{
@@ -619,6 +619,21 @@ impl Peer {
         Ok(js::SimulatorPuzzle {
             puzzle_hash: puzzle_hash.to_js()?,
             puzzle_reveal: puzzle_reveal.to_js()?,
+        })
+    }
+
+    #[napi]
+    /// Creates a new BlsPair.
+    ///
+    /// @param {BigInt} value - The value to use to initialize the pair.
+    /// @returns {Promise<js::BlsPair>} The BlsPair.
+    pub fn simulator_new_blspair(&self, value: BigInt) -> napi::Result<js::BlsPair> {
+        let value = u64::from_js(value)?;
+        let pair = chia_wallet_sdk::test::BlsPair::new(value);
+        Ok(js::BlsPair {
+            puzzle_hash: pair.puzzle_hash.to_js()?,
+            sk: pair.sk.to_js()?,
+            pk: pair.pk.to_js()?,
         })
     }
 

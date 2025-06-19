@@ -93,6 +93,13 @@ pub struct SimulatorPuzzle {
     pub puzzle_reveal: Buffer,
 }
 
+#[napi(object)]
+pub struct BlsPair {
+    pub sk: Buffer,
+    pub pk: Buffer,
+    pub puzzle_hash: Buffer,
+}
+
 pub fn err<T>(error: T) -> napi::Error
 where
     T: ToString,

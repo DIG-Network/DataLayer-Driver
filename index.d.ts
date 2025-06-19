@@ -88,6 +88,11 @@ export interface SimulatorPuzzle {
   puzzleHash: Buffer
   puzzleReveal: Buffer
 }
+export interface BlsPair {
+  sk: Buffer
+  pk: Buffer
+  puzzleHash: Buffer
+}
 /**
  * Creates a new lineage proof.
  *
@@ -480,6 +485,13 @@ export declare class Peer {
    * @returns {Promise<js::SimulatorPuzzle>} The puzzle hash and reveal.
    */
   simulatorNewPuzzle(value: bigint): Promise<SimulatorPuzzle>
+  /**
+   * Creates a new BlsPair.
+   *
+   * @param {BigInt} value - The value to use to initialize the pair.
+   * @returns {Promise<js::BlsPair>} The BlsPair.
+   */
+  simulatorNewBlspair(value: bigint): Promise<BlsPair>
   /**
    * Retrieves all hinted coin states that are unspent on the chain. Note that coins part of spend bundles that are pending in the mempool will also be included.
    *
