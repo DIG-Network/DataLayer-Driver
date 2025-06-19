@@ -19,7 +19,8 @@ use chia::traits::Streamable;
 use chia_wallet_sdk::client::{
     connect_peer, create_native_tls_connector, load_ssl_cert, Connector, PeerOptions,
 };
-use chia_wallet_sdk::test::{ to_puzzle, PeerSimulator };
+use chia_wallet_sdk::prelude::AggSigMe;
+use chia_wallet_sdk::test::{ to_program, to_puzzle, PeerSimulator };
 use chia_wallet_sdk::types::{MAINNET_CONSTANTS, TESTNET11_CONSTANTS};
 use chia_wallet_sdk::utils::Address;
 use chia_wallet_sdk::{
@@ -635,6 +636,16 @@ impl Peer {
             sk: pair.sk.to_js()?,
             pk: pair.pk.to_js()?,
         })
+    }
+
+    #[napi]
+    /// Creates a new simulator program.
+    ///
+    /// @returns {Promise<Buffer>} The program.
+    pub fn simulator_new_program(&self, pk: Buffer) -> napi::Result<Buffer> {
+        let pk = RustPublicKey::from_js(pk)?;
+        let program = to_program([AggSigMe::new(pk, b"Hello, world!".to_vec().into())]).map_err(js::err)?;
+        Ok(program.to_js()?)
     }
 
     #[napi]

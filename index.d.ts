@@ -491,7 +491,13 @@ export declare class Peer {
    * @param {BigInt} value - The value to use to initialize the pair.
    * @returns {Promise<js::BlsPair>} The BlsPair.
    */
-  simulatorNewBlspair(value: bigint): Promise<BlsPair>
+  simulatorNewBlspair(value: bigint): BlsPair
+  /**
+   * Creates a new simulator program.
+   *
+   * @returns {Promise<Buffer>} The program.
+   */
+  simulatorNewProgram(pk: Buffer): Buffer
   /**
    * Retrieves all hinted coin states that are unspent on the chain. Note that coins part of spend bundles that are pending in the mempool will also be included.
    *
