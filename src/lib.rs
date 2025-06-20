@@ -1369,6 +1369,17 @@ pub fn sign_coin_spends(
 }
 
 #[napi]
+pub fn hex_spend_bundle_to_coin_spends(hex: String) -> napi::Result<Vec<CoinSpend>> {
+    let bytes = hex::decode(hex).map_err(js::err)?;
+    let spend_bundle = RustSpendBundle::from_bytes(&bytes).map_err(js::err)?;
+    spend_bundle
+        .coin_spends
+        .into_iter()
+        .map(|cs| cs.to_js())
+        .collect::<Result<Vec<CoinSpend>>>()
+}
+
+#[napi]
 /// Computes the ID (name) of a coin.
 ///
 /// @param {Coin} coin - The coin.
@@ -1615,5 +1626,5 @@ pub fn simulator_new_program(pk: Buffer) -> napi::Result<Buffer> {
     let pk = RustPublicKey::from_js(pk)?;
     let program =
         to_program([AggSigMe::new(pk, b"Hello, world!".to_vec().into())]).map_err(js::err)?;
-    Ok(program.to_js()?)
+    program.to_js()
 }
