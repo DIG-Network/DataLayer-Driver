@@ -359,6 +359,7 @@ export declare function oracleDelegatedPuzzle(oraclePuzzleHash: Buffer, oracleFe
  * @returns {Promise<Buffer>} The signature.
  */
 export declare function signCoinSpends(coinSpends: Array<CoinSpend>, privateKeys: Array<Buffer>, forTestnet: boolean): Buffer
+export declare function hexSpendBundleToCoinSpends(hex: string): Array<CoinSpend>
 /**
  * Computes the ID (name) of a coin.
  *
