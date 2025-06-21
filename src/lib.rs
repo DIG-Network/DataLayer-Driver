@@ -32,7 +32,7 @@ use chia_wallet_sdk::{
     },
 };
 use conversions::{ConversionError, FromJs, ToJs};
-use js::{Coin, CoinSpend, CoinState, EveProof, Proof, ServerCoin};
+use js::{Coin, CoinSpend, CoinState, EveProof, Proof, ServerCoin, SpendBundle};
 use napi::bindgen_prelude::*;
 use napi::Result;
 use std::collections::HashMap;
@@ -1377,6 +1377,13 @@ pub fn hex_spend_bundle_to_coin_spends(hex: String) -> napi::Result<Vec<CoinSpen
         .into_iter()
         .map(|cs| cs.to_js())
         .collect::<Result<Vec<CoinSpend>>>()
+}
+
+#[napi]
+pub fn spend_bundle_to_hex(spend_bundle: SpendBundle) -> napi::Result<String> {
+    let rust_spend_bundle = RustSpendBundle::from_js(spend_bundle)?;
+    let bytes = rust_spend_bundle.to_bytes().map_err(js::err)?;
+    Ok(hex::encode(bytes))
 }
 
 #[napi]

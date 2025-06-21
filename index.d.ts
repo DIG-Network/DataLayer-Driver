@@ -88,11 +88,16 @@ export interface SimulatorPuzzle {
   puzzleHash: Buffer
   puzzleReveal: Buffer
 }
-export interface BlsPair {
-  sk: Buffer
-  pk: Buffer
-  puzzleHash: Buffer
-}
+  export interface BlsPair {
+    sk: Buffer
+    pk: Buffer
+    puzzleHash: Buffer
+  }
+  /** Represents a spend bundle on the Chia blockchain. */
+  export interface SpendBundle {
+    coinSpends: Array<CoinSpend>
+    aggregatedSignature: Buffer
+  }
 /**
  * Creates a new lineage proof.
  *
@@ -358,8 +363,9 @@ export declare function oracleDelegatedPuzzle(oraclePuzzleHash: Buffer, oracleFe
  * @param {Buffer} forTestnet - Set to true to sign spends for testnet11, false for mainnet.
  * @returns {Promise<Buffer>} The signature.
  */
-export declare function signCoinSpends(coinSpends: Array<CoinSpend>, privateKeys: Array<Buffer>, forTestnet: boolean): Buffer
-export declare function hexSpendBundleToCoinSpends(hex: string): Array<CoinSpend>
+  export declare function signCoinSpends(coinSpends: Array<CoinSpend>, privateKeys: Array<Buffer>, forTestnet: boolean): Buffer
+  export declare function hexSpendBundleToCoinSpends(hex: string): Array<CoinSpend>
+  export declare function spendBundleToHex(spendBundle: SpendBundle): string
 /**
  * Computes the ID (name) of a coin.
  *

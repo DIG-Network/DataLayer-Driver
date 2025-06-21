@@ -87,6 +87,16 @@ pub struct ServerCoin {
 }
 
 #[napi(object)]
+/// Represents a spend bundle on the Chia blockchain.
+///
+/// @property {Array<CoinSpend>} coinSpends - The coin spends in this bundle.
+/// @property {Buffer} aggregatedSignature - The aggregated signature.
+pub struct SpendBundle {
+    pub coin_spends: Vec<CoinSpend>,
+    pub aggregated_signature: Buffer,
+}
+
+#[napi(object)]
 /// Object returned by simulator_new_puzzle, containing both the puzzle hash and the puzzle reveal.
 pub struct SimulatorPuzzle {
     pub puzzle_hash: Buffer,

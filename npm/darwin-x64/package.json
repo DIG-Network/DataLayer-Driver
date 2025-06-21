@@ -1,6 +1,6 @@
 {
   "name": "@dignetwork/datalayer-driver-darwin-x64",
-  "version": "0.1.32",
+  "version": "0.1.33",
   "repository": {
     "type": "git",
     "url": "https://github.com/DIG-Network/DataLayer-Driver"

@@ -343,3 +343,29 @@ impl ToJs<js::ServerCoin> for rust::ServerCoin {
         })
     }
 }
+
+impl FromJs<js::SpendBundle> for rust::SpendBundle {
+    fn from_js(value: js::SpendBundle) -> Result<Self> {
+        Ok(Self {
+            coin_spends: value
+                .coin_spends
+                .into_iter()
+                .map(rust::CoinSpend::from_js)
+                .collect::<Result<Vec<_>>>()?,
+            aggregated_signature: Signature::from_js(value.aggregated_signature)?,
+        })
+    }
+}
+
+impl ToJs<js::SpendBundle> for rust::SpendBundle {
+    fn to_js(&self) -> Result<js::SpendBundle> {
+        Ok(js::SpendBundle {
+            coin_spends: self
+                .coin_spends
+                .iter()
+                .map(rust::CoinSpend::to_js)
+                .collect::<Result<Vec<_>>>()?,
+            aggregated_signature: self.aggregated_signature.to_js()?,
+        })
+    }
+}
