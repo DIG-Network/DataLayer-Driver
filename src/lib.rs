@@ -32,21 +32,21 @@ use chia_wallet_sdk::{
     },
 };
 use conversions::{ConversionError, FromJs, ToJs};
+use futures_util::stream::{FuturesUnordered, StreamExt};
 use js::{Coin, CoinSpend, CoinState, EveProof, Proof, ServerCoin, SpendBundle};
 use napi::bindgen_prelude::*;
 use napi::Result;
+use rand::seq::SliceRandom;
 use std::collections::HashMap;
 use std::{net::SocketAddr, sync::Arc};
+use tokio::net::lookup_host;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use tokio::sync::Mutex;
+use tokio::time::{timeout, Duration};
 use wallet::{
     PossibleLaunchersResponse as RustPossibleLaunchersResponse,
     SuccessResponse as RustSuccessResponse, SyncStoreResponse as RustSyncStoreResponse,
 };
-use rand::seq::SliceRandom;
-use tokio::net::lookup_host;
-use futures_util::stream::{FuturesUnordered, StreamExt};
-use tokio::time::{timeout, Duration};
 
 pub use wallet::*;
 
@@ -60,9 +60,7 @@ const MAINNET_DNS_INTRODUCERS: &[&str] = &[
     "seeder.dexie.space",
     "chia.hoffmang.com",
 ];
-const TESTNET11_DNS_INTRODUCERS: &[&str] = &[
-    "dns-introducer-testnet11.chia.net",
-];
+const TESTNET11_DNS_INTRODUCERS: &[&str] = &["dns-introducer-testnet11.chia.net"];
 const MAINNET_DEFAULT_PORT: u16 = 8444;
 const TESTNET11_DEFAULT_PORT: u16 = 58444;
 
@@ -1008,7 +1006,9 @@ impl Peer {
     /// @returns {Promise<Peer>} A connected Peer instance.
     pub async fn connect_random(peer_type: PeerType, tls: &Tls) -> napi::Result<Self> {
         if peer_type == PeerType::Simulator {
-            return Err(js::err("Random peer connection is not supported for simulator"));
+            return Err(js::err(
+                "Random peer connection is not supported for simulator",
+            ));
         }
 
         // Introducers and default port per network
@@ -1027,7 +1027,9 @@ impl Peer {
         }
 
         if addrs.is_empty() {
-            return Err(js::err("Failed to resolve any peer addresses from introducers"));
+            return Err(js::err(
+                "Failed to resolve any peer addresses from introducers",
+            ));
         }
 
         // Shuffle for randomness so every call has different order
@@ -1046,9 +1048,8 @@ impl Peer {
                 let uri = addr.to_string();
                 let pt = peer_type.clone();
                 // Spawn connection attempt with timeout
-                futures.push(async move {
-                    timeout(CONNECT_TIMEOUT, Peer::new(uri, pt, tls)).await
-                });
+                futures
+                    .push(async move { timeout(CONNECT_TIMEOUT, Peer::new(uri, pt, tls)).await });
             }
 
             while let Some(result) = futures.next().await {
