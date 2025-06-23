@@ -24,6 +24,8 @@ chia-wallet-sdk = { version = "0.24.0", features = ["chip-0035", "native-tls", "
 hex-literal = "0.4.1"
 num-bigint = "0.4.6"
 hex = "0.4.3"
+rand = "0.8"
+futures-util = "0.3"
 
 [target.aarch64-unknown-linux-gnu.dependencies]
 openssl = { version = "0.10.64", features = ["vendored"] }

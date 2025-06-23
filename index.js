@@ -310,7 +310,7 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { newLineageProof, newEveProof, Tls, Peer, PeerType, selectCoins, sendXch, morphLauncherId, createServerCoin, mintStore, oracleSpend, addFee, masterPublicKeyToWalletSyntheticKey, masterPublicKeyToFirstPuzzleHash, masterSecretKeyToWalletSyntheticSecretKey, secretKeyToPublicKey, puzzleHashToAddress, addressToPuzzleHash, adminDelegatedPuzzleFromKey, writerDelegatedPuzzleFromKey, oracleDelegatedPuzzle, signCoinSpends, hexSpendBundleToCoinSpends, getCoinId, updateStoreMetadata, updateStoreOwnership, meltStore, signMessage, verifySignedMessage, syntheticKeyToPuzzleHash, getCost, getMainnetGenesisChallenge, getTestnet11GenesisChallenge, simulatorNewPuzzle, simulatorNewBlspair, simulatorNewProgram } = nativeBinding
+const { newLineageProof, newEveProof, Tls, Peer, PeerType, selectCoins, sendXch, morphLauncherId, createServerCoin, mintStore, oracleSpend, addFee, masterPublicKeyToWalletSyntheticKey, masterPublicKeyToFirstPuzzleHash, masterSecretKeyToWalletSyntheticSecretKey, secretKeyToPublicKey, puzzleHashToAddress, addressToPuzzleHash, adminDelegatedPuzzleFromKey, writerDelegatedPuzzleFromKey, oracleDelegatedPuzzle, signCoinSpends, hexSpendBundleToCoinSpends, spendBundleToHex, getCoinId, updateStoreMetadata, updateStoreOwnership, meltStore, signMessage, verifySignedMessage, syntheticKeyToPuzzleHash, getCost, getMainnetGenesisChallenge, getTestnet11GenesisChallenge, simulatorNewPuzzle, simulatorNewBlspair, simulatorNewProgram } = nativeBinding
 
 module.exports.newLineageProof = newLineageProof
 module.exports.newEveProof = newEveProof
@@ -335,6 +335,7 @@ module.exports.writerDelegatedPuzzleFromKey = writerDelegatedPuzzleFromKey
 module.exports.oracleDelegatedPuzzle = oracleDelegatedPuzzle
 module.exports.signCoinSpends = signCoinSpends
 module.exports.hexSpendBundleToCoinSpends = hexSpendBundleToCoinSpends
+module.exports.spendBundleToHex = spendBundleToHex
 module.exports.getCoinId = getCoinId
 module.exports.updateStoreMetadata = updateStoreMetadata
 module.exports.updateStoreOwnership = updateStoreOwnership

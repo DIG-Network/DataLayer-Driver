@@ -43,11 +43,28 @@ use wallet::{
     PossibleLaunchersResponse as RustPossibleLaunchersResponse,
     SuccessResponse as RustSuccessResponse, SyncStoreResponse as RustSyncStoreResponse,
 };
+use rand::seq::SliceRandom;
+use tokio::net::lookup_host;
+use futures_util::stream::{FuturesUnordered, StreamExt};
+use tokio::time::{timeout, Duration};
 
 pub use wallet::*;
 
 #[macro_use]
 extern crate napi_derive;
+
+// DNS introducers and default ports for connecting to random peers.
+const MAINNET_DNS_INTRODUCERS: &[&str] = &[
+    "dns-introducer.chia.net",
+    "chia.ctrlaltdel.ch",
+    "seeder.dexie.space",
+    "chia.hoffmang.com",
+];
+const TESTNET11_DNS_INTRODUCERS: &[&str] = &[
+    "dns-introducer-testnet11.chia.net",
+];
+const MAINNET_DEFAULT_PORT: u16 = 8444;
+const TESTNET11_DEFAULT_PORT: u16 = 58444;
 
 #[napi]
 /// Creates a new lineage proof.
@@ -977,6 +994,74 @@ impl Peer {
             .map_err(js::err)?;
 
         rust_coin_id.to_js()
+    }
+
+    #[napi(factory)]
+    /// Connects to a random peer on the specified network (mainnet or testnet11).
+    ///
+    /// The function performs DNS lookups using the network's introducers, picks a random
+    /// address from the returned list, and attempts to establish a connection. It will
+    /// try every resolved address until a connection succeeds.
+    ///
+    /// @param {PeerType} peerType - Network type: 'mainnet' or 'testnet11'. 'simulator' is not supported.
+    /// @param {Tls} tls - TLS connector.
+    /// @returns {Promise<Peer>} A connected Peer instance.
+    pub async fn connect_random(peer_type: PeerType, tls: &Tls) -> napi::Result<Self> {
+        if peer_type == PeerType::Simulator {
+            return Err(js::err("Random peer connection is not supported for simulator"));
+        }
+
+        // Introducers and default port per network
+        let (introducers, default_port) = match peer_type {
+            PeerType::Mainnet => (MAINNET_DNS_INTRODUCERS, MAINNET_DEFAULT_PORT),
+            PeerType::Testnet11 => (TESTNET11_DNS_INTRODUCERS, TESTNET11_DEFAULT_PORT),
+            PeerType::Simulator => unreachable!(),
+        };
+
+        // Resolve all introducers to socket addresses
+        let mut addrs = Vec::new();
+        for introducer in introducers {
+            if let Ok(iter) = lookup_host((*introducer, default_port)).await {
+                addrs.extend(iter);
+            }
+        }
+
+        if addrs.is_empty() {
+            return Err(js::err("Failed to resolve any peer addresses from introducers"));
+        }
+
+        // Shuffle for randomness so every call has different order
+        {
+            let mut rng = rand::thread_rng();
+            addrs.shuffle(&mut rng);
+        }
+
+        // Try to connect in concurrent batches with timeout logic similar to peer_discovery.rs
+        const BATCH_SIZE: usize = 10;
+        const CONNECT_TIMEOUT: Duration = Duration::from_secs(8);
+
+        for chunk in addrs.chunks(BATCH_SIZE) {
+            let mut futures = FuturesUnordered::new();
+            for addr in chunk {
+                let uri = addr.to_string();
+                let pt = peer_type.clone();
+                // Spawn connection attempt with timeout
+                futures.push(async move {
+                    timeout(CONNECT_TIMEOUT, Peer::new(uri, pt, tls)).await
+                });
+            }
+
+            while let Some(result) = futures.next().await {
+                match result {
+                    Ok(Ok(peer)) => return Ok(peer),
+                    _ => {
+                        // Either timed out or failed; continue with others
+                    }
+                }
+            }
+        }
+
+        Err(js::err("Unable to connect to any discovered peer"))
     }
 }
 

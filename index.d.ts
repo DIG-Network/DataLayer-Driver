@@ -83,21 +83,26 @@ export interface ServerCoin {
   p2PuzzleHash: Buffer
   memoUrls: Array<string>
 }
+/**
+ * Represents a spend bundle on the Chia blockchain.
+ *
+ * @property {Array<CoinSpend>} coinSpends - The coin spends in this bundle.
+ * @property {Buffer} aggregatedSignature - The aggregated signature.
+ */
+export interface SpendBundle {
+  coinSpends: Array<CoinSpend>
+  aggregatedSignature: Buffer
+}
 /** Object returned by simulator_new_puzzle, containing both the puzzle hash and the puzzle reveal. */
 export interface SimulatorPuzzle {
   puzzleHash: Buffer
   puzzleReveal: Buffer
 }
-  export interface BlsPair {
-    sk: Buffer
-    pk: Buffer
-    puzzleHash: Buffer
-  }
-  /** Represents a spend bundle on the Chia blockchain. */
-  export interface SpendBundle {
-    coinSpends: Array<CoinSpend>
-    aggregatedSignature: Buffer
-  }
+export interface BlsPair {
+  sk: Buffer
+  pk: Buffer
+  puzzleHash: Buffer
+}
 /**
  * Creates a new lineage proof.
  *
@@ -363,9 +368,9 @@ export declare function oracleDelegatedPuzzle(oraclePuzzleHash: Buffer, oracleFe
  * @param {Buffer} forTestnet - Set to true to sign spends for testnet11, false for mainnet.
  * @returns {Promise<Buffer>} The signature.
  */
-  export declare function signCoinSpends(coinSpends: Array<CoinSpend>, privateKeys: Array<Buffer>, forTestnet: boolean): Buffer
-  export declare function hexSpendBundleToCoinSpends(hex: string): Array<CoinSpend>
-  export declare function spendBundleToHex(spendBundle: SpendBundle): string
+export declare function signCoinSpends(coinSpends: Array<CoinSpend>, privateKeys: Array<Buffer>, forTestnet: boolean): Buffer
+export declare function hexSpendBundleToCoinSpends(hex: string): Array<CoinSpend>
+export declare function spendBundleToHex(spendBundle: SpendBundle): string
 /**
  * Computes the ID (name) of a coin.
  *
@@ -634,4 +639,16 @@ export declare class Peer {
    * @returns {Promise<Buffer>} Promise that resolves when the coin is spent (returning the coin id).
    */
   waitForCoinToBeSpent(coinId: Buffer, lastHeight: number | undefined | null, headerHash: Buffer): Promise<Buffer>
+  /**
+   * Connects to a random peer on the specified network (mainnet or testnet11).
+   *
+   * The function performs DNS lookups using the network's introducers, picks a random
+   * address from the returned list, and attempts to establish a connection. It will
+   * try every resolved address until a connection succeeds.
+   *
+   * @param {PeerType} peerType - Network type: 'mainnet' or 'testnet11'. 'simulator' is not supported.
+   * @param {Tls} tls - TLS connector.
+   * @returns {Promise<Peer>} A connected Peer instance.
+   */
+  static connectRandom(peerType: PeerType, tls: Tls): Promise<Peer>
 }
