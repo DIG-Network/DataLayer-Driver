@@ -1006,9 +1006,7 @@ impl Peer {
     /// @returns {Promise<Peer>} A connected Peer instance.
     pub async fn connect_random(peer_type: PeerType, tls: &Tls) -> napi::Result<Self> {
         if peer_type == PeerType::Simulator {
-            return Err(js::err(
-                "Random peer connection is not supported for simulator",
-            ));
+            return Peer::new("".to_string(), peer_type, tls).await;
         }
 
         // Introducers and default port per network
