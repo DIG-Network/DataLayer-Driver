@@ -856,7 +856,6 @@ dependencies = [
  "openssl",
  "openssl-sys",
  "rand",
- "serde_json",
  "thiserror 1.0.69",
  "tokio",
 ]
