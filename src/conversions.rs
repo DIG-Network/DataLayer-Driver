@@ -392,14 +392,14 @@ impl FromJs<js::NftMetadata> for chia::puzzles::nft::NftMetadata {
                 None
             },
             edition_number: if let Some(num) = value.edition_number {
-                Some(u64::from_js(num)?)
+                u64::from_js(num)?
             } else {
-                None
+                0
             },
             edition_total: if let Some(total) = value.edition_total {
-                Some(u64::from_js(total)?)
+                u64::from_js(total)?
             } else {
-                None
+                0
             },
         })
     }
@@ -426,13 +426,13 @@ impl ToJs<js::NftMetadata> for chia::puzzles::nft::NftMetadata {
             } else {
                 None
             },
-            edition_number: if let Some(num) = self.edition_number {
-                Some(num.to_js()?)
+            edition_number: if self.edition_number > 0 {
+                Some(self.edition_number.to_js()?)
             } else {
                 None
             },
-            edition_total: if let Some(total) = self.edition_total {
-                Some(total.to_js()?)
+            edition_total: if self.edition_total > 0 {
+                Some(self.edition_total.to_js()?)
             } else {
                 None
             },
