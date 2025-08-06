@@ -1753,12 +1753,12 @@ pub async fn mint_nft(
 /// @param {Peer} peer - The peer to query blockchain data
 /// @param {Coin} didCoin - The DID coin to generate proof for
 /// @param {boolean} forTestnet - Whether to use testnet or mainnet
-/// @returns {Promise<Object>} An object containing the proof and the DID coin
+/// @returns {Promise<DidProofResult>} An object containing the proof and the DID coin
 pub async fn generate_did_proof(
     peer: &Peer,
     did_coin: Coin,
     for_testnet: bool,
-) -> napi::Result<serde_json::Value> {
+) -> napi::Result<js::DidProofResult> {
     let did_coin = rust::Coin::from_js(did_coin)?;
     let network = if for_testnet {
         wallet::TargetNetwork::Testnet11
@@ -1770,10 +1770,10 @@ pub async fn generate_did_proof(
         .await
         .map_err(js::err)?;
 
-    Ok(serde_json::json!({
-        "proof": proof.to_js()?,
-        "didCoin": coin.to_js()?
-    }))
+    Ok(js::DidProofResult {
+        proof: proof.to_js()?,
+        did_coin: coin.to_js()?,
+    })
 }
 
 #[napi]
@@ -1838,12 +1838,12 @@ pub async fn generate_did_proof_from_chain(
 /// @param {Buffer} syntheticKey - The synthetic key that will control the DID
 /// @param {Vec<Coin>} selectedCoins - Coins to spend for creating the DID
 /// @param {BigInt} fee - Transaction fee
-/// @returns {Object} An object containing coinSpends and the created DID coin
+/// @returns {CreateDidResult} An object containing coinSpends and the created DID coin
 pub fn create_simple_did(
     synthetic_key: Buffer,
     selected_coins: Vec<Coin>,
     fee: BigInt,
-) -> napi::Result<serde_json::Value> {
+) -> napi::Result<js::CreateDidResult> {
     let synthetic_key = RustPublicKey::from_js(synthetic_key)?;
     let selected_coins = selected_coins
         .into_iter()
@@ -1860,12 +1860,10 @@ pub fn create_simple_did(
         .map(|cs| cs.to_js())
         .collect::<Result<Vec<_>>>()?;
 
-    let did_coin_js = did_coin.to_js()?;
-
-    Ok(serde_json::json!({
-        "coinSpends": coin_spends_js,
-        "didCoin": did_coin_js
-    }))
+    Ok(js::CreateDidResult {
+        coin_spends: coin_spends_js,
+        did_coin: did_coin.to_js()?,
+    })
 }
 
 #[napi]

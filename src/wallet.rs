@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use chia::bls::{sign, verify, PublicKey, SecretKey, Signature};
@@ -28,13 +27,14 @@ use chia_wallet_sdk::client::{ClientError, Peer};
 use chia_wallet_sdk::driver::{
     get_merkle_tree, DataStore, DataStoreMetadata, DelegatedPuzzle, Did, DidInfo, DriverError,
     IntermediateLauncher, Launcher, Layer, NftMint, OracleLayer,
-    Puzzle, SpendContext, SpendWithConditions, StandardLayer, WriterLayer,
+    SpendContext, SpendWithConditions, StandardLayer, WriterLayer,
 };
-use chia_wallet_sdk::prelude::{EveProof, LineageProof, Proof};
+// Import proof types from our own crate's rust module
+use crate::rust::{EveProof, LineageProof, Proof};
 use chia_wallet_sdk::signer::{AggSigConstants, RequiredSignature, SignerError};
 use chia_wallet_sdk::types::{
     announcement_id,
-    conditions::{CreateCoin, MeltSingleton, Memos, TransferNft, UpdateDataStoreMerkleRoot},
+    conditions::{CreateCoin, MeltSingleton, Memos, UpdateDataStoreMerkleRoot},
     Condition, Conditions, MAINNET_CONSTANTS, TESTNET11_CONSTANTS,
 };
 use chia_wallet_sdk::utils::{self, CoinSelectionError};
@@ -1287,7 +1287,7 @@ pub async fn mint_nft(
     };
 
     // Create the DID singleton info (simplified DID structure)
-    let did_info = DidInfo::new(did_coin.coin_id(), None, 1, vec![], synthetic_key.derive_synthetic());
+    let did_info = DidInfo::new(did_coin.coin_id(), None, 1, vec![], synthetic_key.derive_synthetic().to_bytes().into());
 
     let did = Did::new(did_coin, did_proof, did_info);
 
@@ -1308,7 +1308,7 @@ pub async fn mint_nft(
     // Use IntermediateLauncher to mint the NFT
     let (mint_conditions, _nft) = IntermediateLauncher::new(did_coin.coin_id(), 0, 1)
         .create(&mut ctx)?
-        .mint_nft(&mut ctx, &nft_mint)?;
+        .mint_nft(&mut ctx, nft_mint)?;
 
     // Update the DID with the mint conditions
     let _updated_did = did.update(&mut ctx, &p2, mint_conditions)?;
@@ -1439,12 +1439,12 @@ pub async fn generate_did_proof_from_chain(
         .spent_height
         .ok_or(WalletError::UnknownCoin)?;
 
-    let parent_spend = peer
+    let _parent_spend = peer
         .request_puzzle_and_solution(parent_coin_state.coin.coin_id(), parent_spend_height as u32)
         .await?
         .map_err(|_| WalletError::RejectPuzzleSolution)?;
 
-    let mut allocator = Allocator::new();
+    let _allocator = Allocator::new();
 
     // For now, create a basic lineage proof
     // This is a simplified approach - in production you'd want to properly parse the parent DID
@@ -1549,7 +1549,7 @@ pub async fn resolve_did_string_and_generate_proof(
     use chia_wallet_sdk::utils::Address;
     let address = Address::decode(bech32_part).map_err(|_| WalletError::Parse)?;
 
-    let did_id = address.puzzle_hash();
+    let did_id = address.puzzle_hash;
 
     // First, get the launcher coin state to find the first DID coin
     let launcher_states = peer
@@ -1589,7 +1589,7 @@ pub async fn resolve_did_string_and_generate_proof(
     let launcher_puzzle = launcher_spend.puzzle.to_clvm(&mut allocator)?;
     let launcher_solution = launcher_spend.solution.to_clvm(&mut allocator)?;
 
-    let output = clvmr::run_program(&mut allocator, launcher_puzzle, launcher_solution, u64::MAX, None)
+    let output = clvmr::run_program(&mut allocator, &clvmr::ChiaDialect::new(0), launcher_puzzle, launcher_solution, u64::MAX)
         .map_err(|_| WalletError::Clvm)?;
 
     let conditions =
@@ -1650,7 +1650,7 @@ pub async fn resolve_did_string_and_generate_proof(
         let spend_puzzle = spend.puzzle.to_clvm(&mut allocator)?;
         let spend_solution = spend.solution.to_clvm(&mut allocator)?;
 
-        let spend_output = clvmr::run_program(&mut allocator, spend_puzzle, spend_solution, u64::MAX, None)
+        let spend_output = clvmr::run_program(&mut allocator, &clvmr::ChiaDialect::new(0), spend_puzzle, spend_solution, u64::MAX)
             .map_err(|_| WalletError::Clvm)?;
 
         let spend_conditions = Vec::<Condition>::from_clvm(&allocator, spend_output.1)

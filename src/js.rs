@@ -112,6 +112,22 @@ pub struct BlsPair {
 
 #[napi(object)]
 #[derive(Clone)]
+/// Represents the result of generating a DID proof.
+pub struct DidProofResult {
+    pub proof: Proof,
+    pub did_coin: Coin,
+}
+
+#[napi(object)]
+#[derive(Clone)]
+/// Represents the result of creating a simple DID.
+pub struct CreateDidResult {
+    pub coin_spends: Vec<CoinSpend>,
+    pub did_coin: Coin,
+}
+
+#[napi(object)]
+#[derive(Clone)]
 /// Represents NFT metadata.
 ///
 /// @property {Array<string>} dataUris - List of data URIs.
