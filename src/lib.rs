@@ -33,7 +33,7 @@ use chia_wallet_sdk::{
 };
 use conversions::{ConversionError, FromJs, ToJs};
 use futures_util::stream::{FuturesUnordered, StreamExt};
-use js::{Coin, CoinSpend, CoinState, EveProof, Proof, ServerCoin, SpendBundle};
+use js::{Coin, CoinSpend, CoinState, EveProof, NftMetadata, Proof, ServerCoin, SpendBundle};
 use napi::bindgen_prelude::*;
 use napi::Result;
 use rand::seq::SliceRandom;
@@ -1678,6 +1678,194 @@ pub fn get_mainnet_genesis_challenge() -> napi::Result<Buffer> {
 /// @returns {Buffer} The testnet11 genesis challenge.
 pub fn get_testnet11_genesis_challenge() -> napi::Result<Buffer> {
     TESTNET11_CONSTANTS.genesis_challenge.to_js()
+}
+
+#[napi]
+/// Mints a new NFT using a DID string.
+///
+/// @param {Peer} peer - The peer to query blockchain data
+/// @param {Buffer} syntheticKey - The synthetic key of the wallet
+/// @param {Vec<Coin>} selectedCoins - Coins to spend for the transaction
+/// @param {string} didString - The DID string (e.g., "did:chia:1s8j4pquxfu5mhlldzu357qfqkwa9r35mdx5a0p0ehn76dr4ut4tqs0n6kv")
+/// @param {Buffer} recipientPuzzleHash - The puzzle hash to send the NFT to
+/// @param {NftMetadata} metadata - The NFT metadata
+/// @param {Buffer} royaltyPuzzleHash - Optional royalty puzzle hash (defaults to recipient if None)
+/// @param {number} royaltyBasisPoints - Royalty percentage in basis points (e.g., 300 = 3%)
+/// @param {BigInt} fee - Transaction fee
+/// @param {boolean} forTestnet - Whether to use testnet or mainnet (defaults to mainnet)
+/// @returns {Promise<Vec<CoinSpend>>} A vector of coin spends that mint the NFT
+pub async fn mint_nft(
+    peer: &Peer,
+    synthetic_key: Buffer,
+    selected_coins: Vec<Coin>,
+    did_string: String,
+    recipient_puzzle_hash: Buffer,
+    metadata: NftMetadata,
+    royalty_puzzle_hash: Option<Buffer>,
+    royalty_basis_points: u32,
+    fee: BigInt,
+    for_testnet: Option<bool>,
+) -> napi::Result<Vec<CoinSpend>> {
+    let synthetic_key = RustPublicKey::from_js(synthetic_key)?;
+    let selected_coins = selected_coins
+        .into_iter()
+        .map(RustCoin::from_js)
+        .collect::<Result<Vec<RustCoin>>>()
+        .map_err(js::err)?;
+    let recipient_puzzle_hash = RustBytes32::from_js(recipient_puzzle_hash)?;
+    let metadata = chia::puzzles::nft::NftMetadata::from_js(metadata)?;
+    let royalty_puzzle_hash = if let Some(hash) = royalty_puzzle_hash {
+        Some(RustBytes32::from_js(hash)?)
+    } else {
+        None
+    };
+    let fee = u64::from_js(fee)?;
+    let network = if for_testnet.unwrap_or(false) {
+        wallet::TargetNetwork::Testnet11
+    } else {
+        wallet::TargetNetwork::Mainnet
+    };
+
+    let coin_spends = wallet::mint_nft(
+        &peer.inner,
+        synthetic_key,
+        selected_coins,
+        &did_string,
+        recipient_puzzle_hash,
+        metadata,
+        royalty_puzzle_hash,
+        royalty_basis_points as u16,
+        fee,
+        network,
+    )
+    .await
+    .map_err(js::err)?;
+
+    coin_spends
+        .into_iter()
+        .map(|cs| cs.to_js())
+        .collect::<Result<Vec<_>>>()
+}
+
+#[napi]
+/// Generates a DID proof for a DID coin by analyzing its parent automatically.
+///
+/// @param {Peer} peer - The peer to query blockchain data
+/// @param {Coin} didCoin - The DID coin to generate proof for
+/// @param {boolean} forTestnet - Whether to use testnet or mainnet
+/// @returns {Promise<Object>} An object containing the proof and the DID coin
+pub async fn generate_did_proof(
+    peer: &Peer,
+    did_coin: Coin,
+    for_testnet: bool,
+) -> napi::Result<serde_json::Value> {
+    let did_coin = rust::Coin::from_js(did_coin)?;
+    let network = if for_testnet {
+        wallet::TargetNetwork::Testnet11
+    } else {
+        wallet::TargetNetwork::Mainnet
+    };
+
+    let (proof, coin) = wallet::generate_did_proof(&peer.inner, did_coin, network)
+        .await
+        .map_err(js::err)?;
+
+    Ok(serde_json::json!({
+        "proof": proof.to_js()?,
+        "didCoin": coin.to_js()?
+    }))
+}
+
+#[napi]
+/// Generates a DID proof manually when you have the parent information.
+///
+/// @param {Coin} didCoin - The current DID coin
+/// @param {Coin} parentCoin - The parent coin of the DID (null for eve proof)
+/// @param {Buffer} parentInnerPuzzleHash - The parent's inner puzzle hash (for lineage proof)
+/// @returns {Proof} A DID proof that can be used to spend the DID coin
+pub fn generate_did_proof_manual(
+    did_coin: Coin,
+    parent_coin: Option<Coin>,
+    parent_inner_puzzle_hash: Option<Buffer>,
+) -> napi::Result<Proof> {
+    let did_coin = rust::Coin::from_js(did_coin)?;
+    let parent_coin = if let Some(coin) = parent_coin {
+        Some(rust::Coin::from_js(coin)?)
+    } else {
+        None
+    };
+    let parent_inner_puzzle_hash = if let Some(hash) = parent_inner_puzzle_hash {
+        Some(RustBytes32::from_js(hash)?)
+    } else {
+        None
+    };
+
+    let proof = wallet::generate_did_proof_manual(did_coin, parent_coin, parent_inner_puzzle_hash)
+        .map_err(js::err)?;
+
+    proof.to_js()
+}
+
+#[napi]
+/// Generates a DID proof from the blockchain by analyzing the parent spend.
+///
+/// @param {Peer} peer - The peer to query blockchain data
+/// @param {Coin} didCoin - The DID coin to generate proof for
+/// @param {boolean} forTestnet - Whether to use testnet or mainnet
+/// @returns {Promise<Proof>} A DID proof that can be used to spend the DID coin
+pub async fn generate_did_proof_from_chain(
+    peer: &Peer,
+    did_coin: Coin,
+    for_testnet: bool,
+) -> napi::Result<Proof> {
+    let did_coin = rust::Coin::from_js(did_coin)?;
+    let network = if for_testnet {
+        wallet::TargetNetwork::Testnet11
+    } else {
+        wallet::TargetNetwork::Mainnet
+    };
+
+    let proof = wallet::generate_did_proof_from_chain(&peer.inner, did_coin, network)
+        .await
+        .map_err(js::err)?;
+
+    proof.to_js()
+}
+
+#[napi]
+/// Creates a simple DID from a private key and selected coins.
+///
+/// @param {Buffer} syntheticKey - The synthetic key that will control the DID
+/// @param {Vec<Coin>} selectedCoins - Coins to spend for creating the DID
+/// @param {BigInt} fee - Transaction fee
+/// @returns {Object} An object containing coinSpends and the created DID coin
+pub fn create_simple_did(
+    synthetic_key: Buffer,
+    selected_coins: Vec<Coin>,
+    fee: BigInt,
+) -> napi::Result<serde_json::Value> {
+    let synthetic_key = RustPublicKey::from_js(synthetic_key)?;
+    let selected_coins = selected_coins
+        .into_iter()
+        .map(rust::Coin::from_js)
+        .collect::<Result<Vec<_>>>()
+        .map_err(js::err)?;
+    let fee = u64::from_js(fee)?;
+
+    let (coin_spends, did_coin) =
+        wallet::create_simple_did(synthetic_key, selected_coins, fee).map_err(js::err)?;
+
+    let coin_spends_js = coin_spends
+        .into_iter()
+        .map(|cs| cs.to_js())
+        .collect::<Result<Vec<_>>>()?;
+
+    let did_coin_js = did_coin.to_js()?;
+
+    Ok(serde_json::json!({
+        "coinSpends": coin_spends_js,
+        "didCoin": did_coin_js
+    }))
 }
 
 #[napi]

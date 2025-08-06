@@ -110,6 +110,29 @@ pub struct BlsPair {
     pub puzzle_hash: Buffer,
 }
 
+#[napi(object)]
+#[derive(Clone)]
+/// Represents NFT metadata.
+///
+/// @property {Array<string>} dataUris - List of data URIs.
+/// @property {Buffer} dataHash - Hash of the data (optional).
+/// @property {Array<string>} metadataUris - List of metadata URIs.
+/// @property {Buffer} metadataHash - Hash of the metadata (optional).
+/// @property {Array<string>} licenseUris - List of license URIs.
+/// @property {Buffer} licenseHash - Hash of the license (optional).
+/// @property {BigInt} editionNumber - Edition number (optional).
+/// @property {BigInt} editionTotal - Total number of editions (optional).
+pub struct NftMetadata {
+    pub data_uris: Vec<String>,
+    pub data_hash: Option<Buffer>,
+    pub metadata_uris: Vec<String>,
+    pub metadata_hash: Option<Buffer>,
+    pub license_uris: Vec<String>,
+    pub license_hash: Option<Buffer>,
+    pub edition_number: Option<BigInt>,
+    pub edition_total: Option<BigInt>,
+}
+
 pub fn err<T>(error: T) -> napi::Error
 where
     T: ToString,

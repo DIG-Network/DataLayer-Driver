@@ -369,3 +369,73 @@ impl ToJs<js::SpendBundle> for rust::SpendBundle {
         })
     }
 }
+
+impl FromJs<js::NftMetadata> for chia::puzzles::nft::NftMetadata {
+    fn from_js(value: js::NftMetadata) -> Result<Self> {
+        Ok(chia::puzzles::nft::NftMetadata {
+            data_uris: value.data_uris,
+            data_hash: if let Some(hash) = value.data_hash {
+                Some(Bytes32::from_js(hash)?)
+            } else {
+                None
+            },
+            metadata_uris: value.metadata_uris,
+            metadata_hash: if let Some(hash) = value.metadata_hash {
+                Some(Bytes32::from_js(hash)?)
+            } else {
+                None
+            },
+            license_uris: value.license_uris,
+            license_hash: if let Some(hash) = value.license_hash {
+                Some(Bytes32::from_js(hash)?)
+            } else {
+                None
+            },
+            edition_number: if let Some(num) = value.edition_number {
+                Some(u64::from_js(num)?)
+            } else {
+                None
+            },
+            edition_total: if let Some(total) = value.edition_total {
+                Some(u64::from_js(total)?)
+            } else {
+                None
+            },
+        })
+    }
+}
+
+impl ToJs<js::NftMetadata> for chia::puzzles::nft::NftMetadata {
+    fn to_js(&self) -> Result<js::NftMetadata> {
+        Ok(js::NftMetadata {
+            data_uris: self.data_uris.clone(),
+            data_hash: if let Some(hash) = self.data_hash {
+                Some(hash.to_js()?)
+            } else {
+                None
+            },
+            metadata_uris: self.metadata_uris.clone(),
+            metadata_hash: if let Some(hash) = self.metadata_hash {
+                Some(hash.to_js()?)
+            } else {
+                None
+            },
+            license_uris: self.license_uris.clone(),
+            license_hash: if let Some(hash) = self.license_hash {
+                Some(hash.to_js()?)
+            } else {
+                None
+            },
+            edition_number: if let Some(num) = self.edition_number {
+                Some(num.to_js()?)
+            } else {
+                None
+            },
+            edition_total: if let Some(total) = self.edition_total {
+                Some(total.to_js()?)
+            } else {
+                None
+            },
+        })
+    }
+}

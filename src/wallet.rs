@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use chia::bls::{sign, verify, PublicKey, SecretKey, Signature};
@@ -18,19 +19,21 @@ use chia::protocol::{
     TransactionAck,
 };
 use chia::puzzles::{
+    nft::NftMetadata,
     standard::{StandardArgs, StandardSolution},
     DeriveSynthetic,
 };
-use chia_puzzles::SINGLETON_LAUNCHER_HASH;
+use chia_puzzles::{NFT_METADATA_UPDATER_DEFAULT_HASH, SINGLETON_LAUNCHER_HASH};
 use chia_wallet_sdk::client::{ClientError, Peer};
 use chia_wallet_sdk::driver::{
-    get_merkle_tree, DataStore, DataStoreMetadata, DelegatedPuzzle, DriverError, Launcher, Layer,
-    OracleLayer, SpendContext, SpendWithConditions, StandardLayer, WriterLayer,
+    get_merkle_tree, DataStore, DataStoreMetadata, DelegatedPuzzle, Did, DidInfo, DriverError,
+    EveProof, IntermediateLauncher, Launcher, Layer, LineageProof, Nft, NftMint, OracleLayer,
+    Proof, Puzzle, SpendContext, SpendWithConditions, StandardLayer, WriterLayer,
 };
 use chia_wallet_sdk::signer::{AggSigConstants, RequiredSignature, SignerError};
 use chia_wallet_sdk::types::{
     announcement_id,
-    conditions::{CreateCoin, MeltSingleton, Memos, UpdateDataStoreMerkleRoot},
+    conditions::{CreateCoin, MeltSingleton, Memos, TransferNft, UpdateDataStoreMerkleRoot},
     Condition, Conditions, MAINNET_CONSTANTS, TESTNET11_CONSTANTS,
 };
 use chia_wallet_sdk::utils::{self, CoinSelectionError};
@@ -1232,4 +1235,464 @@ pub async fn unsubscribe_from_coin_states(
         .map_err(WalletError::Client)?;
 
     Ok(())
+}
+
+/// Mints a new NFT using a DID string.
+///
+/// # Arguments
+/// * `peer` - The peer to query blockchain data
+/// * `synthetic_key` - The synthetic key of the wallet
+/// * `selected_coins` - Coins to spend for the transaction
+/// * `did_string` - The DID string (e.g., "did:chia:1s8j4pquxfu5mhlldzu357qfqkwa9r35mdx5a0p0ehn76dr4ut4tqs0n6kv")
+/// * `recipient_puzzle_hash` - The puzzle hash to send the NFT to
+/// * `metadata` - The NFT metadata
+/// * `royalty_puzzle_hash` - Optional royalty puzzle hash (defaults to recipient if None)
+/// * `royalty_basis_points` - Royalty percentage in basis points (e.g., 300 = 3%)
+/// * `fee` - Transaction fee
+/// * `network` - The target network (mainnet/testnet)
+///
+/// # Returns
+/// A vector of coin spends that mint the NFT
+pub async fn mint_nft(
+    peer: &Peer,
+    synthetic_key: PublicKey,
+    selected_coins: Vec<Coin>,
+    did_string: &str,
+    recipient_puzzle_hash: Bytes32,
+    metadata: NftMetadata,
+    royalty_puzzle_hash: Option<Bytes32>,
+    royalty_basis_points: u16,
+    fee: u64,
+    network: TargetNetwork,
+) -> Result<Vec<CoinSpend>, WalletError> {
+    // Resolve the DID string to get the current coin and proof
+    let (did_proof, did_coin) =
+        resolve_did_string_and_generate_proof(peer, did_string, network).await?;
+    let mut ctx = SpendContext::new();
+
+    // Convert DID proof
+    let did_proof = match did_proof {
+        chia::puzzles::Proof::Eve(eve) => Proof::Eve(EveProof {
+            parent_parent_coin_info: eve.parent_parent_coin_info,
+            parent_amount: eve.parent_amount,
+        }),
+        chia::puzzles::Proof::Lineage(lineage) => Proof::Lineage(LineageProof {
+            parent_parent_coin_info: lineage.parent_parent_coin_info,
+            parent_inner_puzzle_hash: lineage.parent_inner_puzzle_hash,
+            parent_amount: lineage.parent_amount,
+        }),
+    };
+
+    // Create the DID singleton info (simplified DID structure)
+    let did_info = DidInfo::new(did_coin.coin_id(), synthetic_key.derive_synthetic(), None);
+
+    let did = Did::new(did_coin, did_proof, did_info);
+
+    // Create StandardLayer for spending coins
+    let p2 = StandardLayer::new(synthetic_key);
+
+    // Allocate metadata
+    let metadata_ptr = ctx.alloc_hashed(&metadata)?;
+
+    // Create the NFT mint configuration
+    let transfer_condition = TransferNft::new(
+        Some(did.info.launcher_id),
+        Vec::new(),
+        Some(did.info.inner_puzzle_hash().into()),
+    );
+
+    let nft_mint = NftMint::new(
+        metadata_ptr,
+        recipient_puzzle_hash,
+        royalty_basis_points,
+        Some(transfer_condition),
+    );
+
+    // Use IntermediateLauncher to mint the NFT
+    let (mint_conditions, _nft) = IntermediateLauncher::new(did_coin.coin_id(), 0, 1)
+        .create(&mut ctx)?
+        .mint_nft(&mut ctx, &nft_mint)?;
+
+    // Update the DID with the mint conditions
+    let _updated_did = did.update(&mut ctx, &p2, mint_conditions)?;
+
+    // Handle fee and change
+    let total_input = selected_coins.iter().map(|coin| coin.amount).sum::<u64>();
+    let total_needed = fee + 1; // 1 mojo for the NFT
+
+    if total_input < total_needed {
+        return Err(WalletError::Parse); // Not enough coins
+    }
+
+    let change = total_input - total_needed;
+    let change_puzzle_hash = StandardArgs::curry_tree_hash(synthetic_key).into();
+
+    // Spend the selected coins
+    spend_coins_together(
+        &mut ctx,
+        synthetic_key,
+        &selected_coins,
+        Conditions::new().reserve_fee(fee),
+        total_needed as i64,
+        change_puzzle_hash,
+    )?;
+
+    Ok(ctx.take())
+}
+
+/// Generates a DID proof for a DID coin by analyzing its parent.
+/// This is a simplified version that automatically determines the proof type.
+///
+/// # Arguments
+/// * `peer` - The peer to query blockchain data
+/// * `did_coin` - The DID coin to generate proof for
+/// * `network` - The target network (mainnet/testnet)
+///
+/// # Returns
+/// A tuple containing the DID proof and the DID coin
+pub async fn generate_did_proof(
+    peer: &Peer,
+    did_coin: Coin,
+    network: TargetNetwork,
+) -> Result<(chia::puzzles::Proof, Coin), WalletError> {
+    let proof = generate_did_proof_from_chain(peer, did_coin, network).await?;
+    Ok((proof, did_coin))
+}
+
+/// Generates a DID proof manually when you have the parent information.
+///
+/// # Arguments
+/// * `did_coin` - The current DID coin
+/// * `parent_coin` - The parent coin of the DID (None for eve proof)
+/// * `parent_inner_puzzle_hash` - The parent's inner puzzle hash (for lineage proof)
+///
+/// # Returns
+/// A DID proof that can be used to spend the DID coin
+pub fn generate_did_proof_manual(
+    did_coin: Coin,
+    parent_coin: Option<Coin>,
+    parent_inner_puzzle_hash: Option<Bytes32>,
+) -> Result<chia::puzzles::Proof, WalletError> {
+    match parent_coin {
+        // Eve proof - first spend from launcher
+        None => {
+            // For eve proof, we need the launcher coin info
+            // The parent_parent_coin_info is the coin that created the launcher
+            // The parent_amount is the launcher coin amount (typically 1 mojo)
+            Ok(chia::puzzles::Proof::Eve(chia::puzzles::EveProof {
+                parent_parent_coin_info: did_coin.parent_coin_info,
+                parent_amount: 1, // Launcher coins are typically 1 mojo
+            }))
+        }
+        // Lineage proof - subsequent spends
+        Some(parent) => {
+            let parent_inner_puzzle_hash = parent_inner_puzzle_hash.ok_or(WalletError::Parse)?; // Need inner puzzle hash for lineage proof
+
+            Ok(chia::puzzles::Proof::Lineage(chia::puzzles::LineageProof {
+                parent_parent_coin_info: parent.parent_coin_info,
+                parent_inner_puzzle_hash,
+                parent_amount: parent.amount,
+            }))
+        }
+    }
+}
+
+/// Generates a DID proof from a coin spend by analyzing the parent spend.
+///
+/// # Arguments
+/// * `peer` - The peer to query blockchain data
+/// * `did_coin` - The DID coin to generate proof for
+/// * `network` - The target network (mainnet/testnet)
+///
+/// # Returns
+/// A DID proof that can be used to spend the DID coin
+pub async fn generate_did_proof_from_chain(
+    peer: &Peer,
+    did_coin: Coin,
+    network: TargetNetwork,
+) -> Result<chia::puzzles::Proof, WalletError> {
+    // Get the parent coin state
+    let parent_coin_states = peer
+        .request_coin_state(
+            vec![did_coin.parent_coin_info],
+            None,
+            match network {
+                TargetNetwork::Mainnet => MAINNET_CONSTANTS.genesis_challenge,
+                TargetNetwork::Testnet11 => TESTNET11_CONSTANTS.genesis_challenge,
+            },
+            false,
+        )
+        .await?
+        .map_err(|_| WalletError::RejectCoinState)?
+        .coin_states;
+
+    let parent_coin_state = parent_coin_states.first().ok_or(WalletError::UnknownCoin)?;
+
+    // Check if parent is a launcher (puzzle hash matches singleton launcher)
+    if parent_coin_state.coin.puzzle_hash == SINGLETON_LAUNCHER_HASH.into() {
+        // This is an eve proof - first spend from launcher
+        return Ok(chia::puzzles::Proof::Eve(chia::puzzles::EveProof {
+            parent_parent_coin_info: parent_coin_state.coin.parent_coin_info,
+            parent_amount: parent_coin_state.coin.amount,
+        }));
+    }
+
+    // This is a lineage proof - need to get the parent's puzzle and solution
+    let parent_spend_height = parent_coin_state
+        .spent_height
+        .ok_or(WalletError::UnknownCoin)?;
+
+    let parent_spend = peer
+        .request_puzzle_and_solution(parent_coin_state.coin.coin_id(), parent_spend_height as u32)
+        .await?
+        .map_err(|_| WalletError::RejectPuzzleSolution)?;
+
+    let mut allocator = Allocator::new();
+
+    // Parse the parent DID to get its inner puzzle hash
+    let parent_puzzle = Puzzle::parse(&allocator, parent_spend.puzzle.to_clvm(&mut allocator)?);
+
+    // Try to parse as DID
+    if let Some((parent_did, _)) = Did::parse(
+        &mut allocator,
+        parent_coin_state.coin,
+        parent_puzzle,
+        parent_spend.solution.to_clvm(&mut allocator)?,
+    )? {
+        Ok(chia::puzzles::Proof::Lineage(chia::puzzles::LineageProof {
+            parent_parent_coin_info: parent_coin_state.coin.parent_coin_info,
+            parent_inner_puzzle_hash: parent_did.info.inner_puzzle_hash().into(),
+            parent_amount: parent_coin_state.coin.amount,
+        }))
+    } else {
+        Err(WalletError::Parse)
+    }
+}
+
+/// Creates a simple DID from a private key and selected coins.
+///
+/// # Arguments
+/// * `synthetic_key` - The synthetic key that will control the DID
+/// * `selected_coins` - Coins to spend for creating the DID
+/// * `fee` - Transaction fee
+///
+/// # Returns
+/// A tuple containing the coin spends and the created DID coin
+pub fn create_simple_did(
+    synthetic_key: PublicKey,
+    selected_coins: Vec<Coin>,
+    fee: u64,
+) -> Result<(Vec<CoinSpend>, Coin), WalletError> {
+    let mut ctx = SpendContext::new();
+
+    let p2 = StandardLayer::new(synthetic_key);
+    let puzzle_hash = StandardArgs::curry_tree_hash(synthetic_key).into();
+
+    // Calculate total input and needed amount
+    let total_input = selected_coins.iter().map(|coin| coin.amount).sum::<u64>();
+    let total_needed = fee + 1; // 1 mojo for the DID
+
+    if total_input < total_needed {
+        return Err(WalletError::Parse); // Not enough coins
+    }
+
+    let change = total_input - total_needed;
+
+    // Create the DID using the first coin as the parent for the launcher
+    let first_coin = selected_coins[0];
+    let launcher = Launcher::new(first_coin.coin_id(), 1);
+
+    // Create the DID
+    let (create_did_conditions, did) = launcher.create_simple_did(&mut ctx, &p2)?;
+
+    // Spend all selected coins together
+    let first_coin_id = first_coin.coin_id();
+
+    for (i, &coin) in selected_coins.iter().enumerate() {
+        if i == 0 {
+            // First coin creates the DID and handles change/fee
+            let mut conditions = create_did_conditions.clone();
+
+            if change > 0 {
+                let hint = ctx.hint(puzzle_hash)?;
+                conditions = conditions.create_coin(puzzle_hash, change, hint);
+            }
+
+            if fee > 0 {
+                conditions = conditions.reserve_fee(fee);
+            }
+
+            p2.spend(&mut ctx, coin, conditions)?;
+        } else {
+            // Other coins just assert concurrent spend
+            p2.spend(
+                &mut ctx,
+                coin,
+                Conditions::new().assert_concurrent_spend(first_coin_id),
+            )?;
+        }
+    }
+
+    Ok((ctx.take(), did.coin))
+}
+
+/// Resolves a DID string to find the current DID coin and generates its proof.
+///
+/// # Arguments
+/// * `peer` - The peer to query blockchain data
+/// * `did_string` - The DID string (e.g., "did:chia:1s8j4pquxfu5mhlldzu357qfqkwa9r35mdx5a0p0ehn76dr4ut4tqs0n6kv")
+/// * `network` - The target network (mainnet/testnet)
+///
+/// # Returns
+/// A tuple containing the DID proof and the current DID coin
+pub async fn resolve_did_string_and_generate_proof(
+    peer: &Peer,
+    did_string: &str,
+    network: TargetNetwork,
+) -> Result<(chia::puzzles::Proof, Coin), WalletError> {
+    // Parse DID string to extract launcher ID
+    let parts: Vec<&str> = did_string.split(':').collect();
+
+    if parts.len() != 3 || parts[0] != "did" || parts[1] != "chia" {
+        return Err(WalletError::Parse);
+    }
+
+    let bech32_part = parts[2];
+
+    // Decode the bech32 address to get the launcher ID
+    use chia_wallet_sdk::utils::Address;
+    let address = Address::from_str(bech32_part).map_err(|_| WalletError::Parse)?;
+
+    let did_id = address.puzzle_hash();
+
+    // First, get the launcher coin state to find the first DID coin
+    let launcher_states = peer
+        .request_coin_state(
+            vec![did_id],
+            None,
+            match network {
+                TargetNetwork::Mainnet => MAINNET_CONSTANTS.genesis_challenge,
+                TargetNetwork::Testnet11 => TESTNET11_CONSTANTS.genesis_challenge,
+            },
+            false,
+        )
+        .await?
+        .map_err(|_| WalletError::RejectCoinState)?
+        .coin_states;
+
+    let launcher_state = launcher_states.first().ok_or(WalletError::UnknownCoin)?;
+
+    // Verify this is actually a launcher
+    if launcher_state.coin.puzzle_hash != SINGLETON_LAUNCHER_HASH.into() {
+        return Err(WalletError::Parse);
+    }
+
+    // Get the spend of the launcher to find the first DID coin
+    let launcher_spend_height = launcher_state
+        .spent_height
+        .ok_or(WalletError::UnknownCoin)?;
+
+    let launcher_spend = peer
+        .request_puzzle_and_solution(launcher_state.coin.coin_id(), launcher_spend_height as u32)
+        .await?
+        .map_err(|_| WalletError::RejectPuzzleSolution)?;
+
+    let mut allocator = Allocator::new();
+
+    // Run the launcher spend to find the created DID coin
+    let launcher_puzzle = launcher_spend.puzzle.to_clvm(&mut allocator)?;
+    let launcher_solution = launcher_spend.solution.to_clvm(&mut allocator)?;
+
+    let output = allocator
+        .run_program(launcher_puzzle, launcher_solution, u64::MAX)
+        .map_err(|_| WalletError::Clvm)?;
+
+    let conditions =
+        Vec::<Condition>::from_clvm(&allocator, output.1).map_err(|_| WalletError::Parse)?;
+
+    // Find the CREATE_COIN condition to get the first DID coin
+    let mut first_did_coin: Option<Coin> = None;
+    for condition in conditions {
+        if let Some(create_coin) = condition.into_create_coin() {
+            // DID coins have odd amounts (singleton property)
+            if create_coin.amount % 2 == 1 {
+                first_did_coin = Some(Coin::new(
+                    launcher_state.coin.coin_id(),
+                    create_coin.puzzle_hash,
+                    create_coin.amount,
+                ));
+                break;
+            }
+        }
+    }
+
+    let first_did_coin = first_did_coin.ok_or(WalletError::Parse)?;
+
+    // Now we need to trace the DID through all its spends to find the current coin
+    let mut current_did_coin = first_did_coin;
+
+    loop {
+        // Check if this coin is spent
+        let coin_states = peer
+            .request_coin_state(
+                vec![current_did_coin.coin_id()],
+                None,
+                match network {
+                    TargetNetwork::Mainnet => MAINNET_CONSTANTS.genesis_challenge,
+                    TargetNetwork::Testnet11 => TESTNET11_CONSTANTS.genesis_challenge,
+                },
+                false,
+            )
+            .await?
+            .map_err(|_| WalletError::RejectCoinState)?
+            .coin_states;
+
+        let coin_state = coin_states.first().ok_or(WalletError::UnknownCoin)?;
+
+        // If not spent, this is our current DID coin
+        if coin_state.spent_height.is_none() {
+            break;
+        }
+
+        // If spent, find the child DID coin
+        let spend_height = coin_state.spent_height.unwrap();
+        let spend = peer
+            .request_puzzle_and_solution(current_did_coin.coin_id(), spend_height as u32)
+            .await?
+            .map_err(|_| WalletError::RejectPuzzleSolution)?;
+
+        // Parse the spend to find the child DID coin
+        let spend_puzzle = spend.puzzle.to_clvm(&mut allocator)?;
+        let spend_solution = spend.solution.to_clvm(&mut allocator)?;
+
+        let spend_output = allocator
+            .run_program(spend_puzzle, spend_solution, u64::MAX)
+            .map_err(|_| WalletError::Clvm)?;
+
+        let spend_conditions = Vec::<Condition>::from_clvm(&allocator, spend_output.1)
+            .map_err(|_| WalletError::Parse)?;
+
+        // Find the CREATE_COIN condition for the child DID
+        let mut child_did_coin: Option<Coin> = None;
+        for condition in spend_conditions {
+            if let Some(create_coin) = condition.into_create_coin() {
+                // DID coins have odd amounts (singleton property)
+                if create_coin.amount % 2 == 1 {
+                    child_did_coin = Some(Coin::new(
+                        current_did_coin.coin_id(),
+                        create_coin.puzzle_hash,
+                        create_coin.amount,
+                    ));
+                    break;
+                }
+            }
+        }
+
+        current_did_coin = child_did_coin.ok_or(WalletError::Parse)?;
+    }
+
+    // Now generate the proof for the current DID coin
+    let proof = generate_did_proof_from_chain(peer, current_did_coin, network).await?;
+
+    Ok((proof, current_did_coin))
 }
