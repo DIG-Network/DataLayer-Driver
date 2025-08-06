@@ -26,8 +26,8 @@ use chia_puzzles::SINGLETON_LAUNCHER_HASH;
 use chia_wallet_sdk::client::{ClientError, Peer};
 use chia_wallet_sdk::driver::{
     get_merkle_tree, DataStore, DataStoreMetadata, DelegatedPuzzle, Did, DidInfo, DriverError,
-    IntermediateLauncher, Launcher, Layer, NftMint, OracleLayer,
-    SpendContext, SpendWithConditions, StandardLayer, WriterLayer,
+    IntermediateLauncher, Launcher, Layer, NftMint, OracleLayer, SpendContext, SpendWithConditions,
+    StandardLayer, WriterLayer,
 };
 // Import proof types from our own crate's rust module
 use crate::rust::{EveProof, LineageProof, Proof};
@@ -1263,7 +1263,7 @@ pub async fn mint_nft(
     did_string: &str,
     recipient_puzzle_hash: Bytes32,
     metadata: NftMetadata,
-    royalty_puzzle_hash: Option<Bytes32>,
+    _royalty_puzzle_hash: Option<Bytes32>,
     royalty_basis_points: u16,
     fee: u64,
     network: TargetNetwork,
@@ -1287,19 +1287,21 @@ pub async fn mint_nft(
     };
 
     // Create the DID singleton info (simplified DID structure)
-    let did_info = DidInfo::new(did_coin.coin_id(), None, 1, vec![], synthetic_key.derive_synthetic().to_bytes().into());
+    // Use the first 32 bytes of the public key (truncate from 48 to 32 bytes)
+    let public_key_bytes = synthetic_key.derive_synthetic().to_bytes();
+    let mut public_key_hash = [0u8; 32];
+    public_key_hash.copy_from_slice(&public_key_bytes[..32]);
+    let did_info: DidInfo<Vec<u8>> =
+        DidInfo::new(did_coin.coin_id(), None, 1, vec![], public_key_hash.into());
 
     let did = Did::new(did_coin, did_proof, did_info);
 
     // Create StandardLayer for spending coins
     let p2 = StandardLayer::new(synthetic_key);
 
-    // Allocate metadata
-    let metadata_ptr = ctx.alloc(&metadata)?;
-
-    // Create the NFT mint configuration
+    // Create the NFT mint configuration with metadata
     let nft_mint = NftMint::new(
-        metadata_ptr,
+        metadata,
         recipient_puzzle_hash,
         royalty_basis_points,
         None, // No DID owner for now - we'll set this up differently
@@ -1321,7 +1323,7 @@ pub async fn mint_nft(
         return Err(WalletError::Parse); // Not enough coins
     }
 
-    let change = total_input - total_needed;
+    let _change = total_input - total_needed;
     let change_puzzle_hash = StandardArgs::curry_tree_hash(synthetic_key).into();
 
     // Spend the selected coins
@@ -1589,8 +1591,14 @@ pub async fn resolve_did_string_and_generate_proof(
     let launcher_puzzle = launcher_spend.puzzle.to_clvm(&mut allocator)?;
     let launcher_solution = launcher_spend.solution.to_clvm(&mut allocator)?;
 
-    let output = clvmr::run_program(&mut allocator, &clvmr::ChiaDialect::new(0), launcher_puzzle, launcher_solution, u64::MAX)
-        .map_err(|_| WalletError::Clvm)?;
+    let output = clvmr::run_program(
+        &mut allocator,
+        &clvmr::ChiaDialect::new(0),
+        launcher_puzzle,
+        launcher_solution,
+        u64::MAX,
+    )
+    .map_err(|_| WalletError::Clvm)?;
 
     let conditions =
         Vec::<Condition>::from_clvm(&allocator, output.1).map_err(|_| WalletError::Parse)?;
@@ -1650,8 +1658,14 @@ pub async fn resolve_did_string_and_generate_proof(
         let spend_puzzle = spend.puzzle.to_clvm(&mut allocator)?;
         let spend_solution = spend.solution.to_clvm(&mut allocator)?;
 
-        let spend_output = clvmr::run_program(&mut allocator, &clvmr::ChiaDialect::new(0), spend_puzzle, spend_solution, u64::MAX)
-            .map_err(|_| WalletError::Clvm)?;
+        let spend_output = clvmr::run_program(
+            &mut allocator,
+            &clvmr::ChiaDialect::new(0),
+            spend_puzzle,
+            spend_solution,
+            u64::MAX,
+        )
+        .map_err(|_| WalletError::Clvm)?;
 
         let spend_conditions = Vec::<Condition>::from_clvm(&allocator, spend_output.1)
             .map_err(|_| WalletError::Parse)?;
