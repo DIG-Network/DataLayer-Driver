@@ -110,7 +110,7 @@ jobs:
         shell: bash
       - name: Setup node x86
         if: matrix.settings.target == 'i686-pc-windows-msvc'
-        run: npm config set target_arch ia32
+        run: echo "Setting up for i686 build"
         shell: bash
       - name: Install dependencies
         run: cd napi && npm install
@@ -233,7 +233,6 @@ jobs:
         shell: bash
       - name: Install dependencies
         run: |
-          npm config set target_arch arm64
           cd napi && npm install
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
