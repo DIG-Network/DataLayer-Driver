@@ -840,7 +840,7 @@ checksum = "e8566979429cf69b49a5c740c60791108e86440e8be149bbea4fe54d2c32d6e2"
 
 [[package]]
 name = "datalayer-driver"
-version = "0.1.0"
+version = "0.1.38"
 dependencies = [
  "chia",
  "chia-puzzles",
@@ -862,17 +862,13 @@ name = "datalayer-driver-napi"
 version = "0.1.0"
 dependencies = [
  "chia",
- "chia-puzzles",
  "chia-wallet-sdk",
- "clvmr",
  "datalayer-driver",
  "futures-util",
  "hex",
- "hex-literal",
  "napi",
  "napi-build",
  "napi-derive",
- "num-bigint",
  "openssl",
  "openssl-sys",
  "rand",

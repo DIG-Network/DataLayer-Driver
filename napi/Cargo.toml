@@ -14,15 +14,17 @@ datalayer-driver = { path = ".." }
 napi = { version = "2.12.2", default-features = false, features = ["napi6", "async"] }
 napi-derive = "2.12.2"
 
-# Re-export needed dependencies from the main crate
+# Dependencies needed for NAPI bindings
+# Note: These are required even though datalayer-driver re-exports many types,
+# because the NAPI bindings need direct access to these crates for:
+# - Type conversions (chia types)
+# - Error handling (thiserror)
+# - Async runtime (tokio, futures-util)
+# - Utilities (hex encoding, random selection)
 chia = "0.22.0"
-chia-puzzles = "0.20.1"
 thiserror = "1.0.61"
-clvmr = "0.13.1"
 tokio = "1.39.3"
 chia-wallet-sdk = { version = "0.24.0", features = ["chip-0035", "native-tls", "peer-simulator"] }
-hex-literal = "0.4.1"
-num-bigint = "0.4.6"
 hex = "0.4.3"
 rand = "0.8"
 futures-util = "0.3"
