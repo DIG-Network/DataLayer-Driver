@@ -97,12 +97,12 @@ pub fn get_coin_id(coin: &Coin) -> Bytes32 {
 pub mod constants {
     use chia_wallet_sdk::types::{MAINNET_CONSTANTS, TESTNET11_CONSTANTS};
 
-/// Returns the mainnet genesis challenge.
+    /// Returns the mainnet genesis challenge.
     pub fn get_mainnet_genesis_challenge() -> chia::protocol::Bytes32 {
         MAINNET_CONSTANTS.genesis_challenge
     }
 
-/// Returns the testnet11 genesis challenge.
+    /// Returns the testnet11 genesis challenge.
     pub fn get_testnet11_genesis_challenge() -> chia::protocol::Bytes32 {
         TESTNET11_CONSTANTS.genesis_challenge
     }
