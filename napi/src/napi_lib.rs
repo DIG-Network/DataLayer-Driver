@@ -1,24 +1,21 @@
 #![allow(unexpected_cfgs)]
 
 use crate::conversions::{ConversionError, FromJs, ToJs};
-use crate::js::{Coin, CoinSpend, CoinState, EveProof, NftMetadata, Proof, ServerCoin, SpendBundle};
+use crate::js::{
+    Coin, CoinSpend, CoinState, EveProof, NftMetadata, Proof, ServerCoin, SpendBundle,
+};
 
 // Import from the main datalayer-driver crate
 use datalayer_driver::{
-    server_coin, wallet, rust,
-    master_to_wallet_unhardened, 
-    PublicKey as RustPublicKey, SecretKey as RustSecretKey,
-    Signature as RustSignature,
-    Bytes as RustBytes, Bytes32 as RustBytes32, Coin as RustCoin, CoinSpend as RustCoinSpend,
-    SpendBundle as RustSpendBundle, Proof as RustProof,
-    Peer as RustPeer,
+    master_to_wallet_unhardened, rust, server_coin, wallet, Bytes as RustBytes,
+    Bytes32 as RustBytes32, Coin as RustCoin, CoinSpend as RustCoinSpend,
     DataStore as RustDataStore, DataStoreInfo as RustDataStoreInfo,
     DataStoreMetadata as RustDataStoreMetadata, DelegatedPuzzle as RustDelegatedPuzzle,
+    Peer as RustPeer, Proof as RustProof, PublicKey as RustPublicKey, SecretKey as RustSecretKey,
+    Signature as RustSignature, SpendBundle as RustSpendBundle,
 };
 
-use chia::protocol::{
-    CoinStateUpdate, NewPeakWallet, ProtocolMessageTypes,
-};
+use chia::protocol::{CoinStateUpdate, NewPeakWallet, ProtocolMessageTypes};
 use chia::puzzles::{standard::StandardArgs, DeriveSynthetic};
 use chia::traits::Streamable;
 use chia_wallet_sdk::client::{
@@ -617,7 +614,9 @@ impl Peer {
                 let coin = sim.lock().await.mint_coin(puzzle_hash, amount).await;
                 coin.to_js()
             }
-            None => Err(crate::js::err("Simulator is not available for this peer type")),
+            None => Err(crate::js::err(
+                "Simulator is not available for this peer type",
+            )),
         }
     }
 
@@ -628,7 +627,9 @@ impl Peer {
     pub async fn simulator_height(&self) -> napi::Result<u32> {
         match &self.sim {
             Some(sim) => Ok(sim.lock().await.height().await),
-            None => Err(crate::js::err("Simulator is not available for this peer type")),
+            None => Err(crate::js::err(
+                "Simulator is not available for this peer type",
+            )),
         }
     }
 
@@ -645,7 +646,9 @@ impl Peer {
                 Some(state) => Ok(Some(state.to_js()?)),
                 None => Ok(None),
             },
-            None => Err(crate::js::err("Simulator is not available for this peer type")),
+            None => Err(crate::js::err(
+                "Simulator is not available for this peer type",
+            )),
         }
     }
 
@@ -657,7 +660,9 @@ impl Peer {
     pub async fn header_hash(&self, height: u32) -> napi::Result<Buffer> {
         match &self.sim {
             Some(sim) => sim.lock().await.header_hash(height).await.to_js(),
-            None => Err(crate::js::err("Simulator is not available for this peer type")),
+            None => Err(crate::js::err(
+                "Simulator is not available for this peer type",
+            )),
         }
     }
 
@@ -1180,7 +1185,8 @@ pub fn create_server_coin(
     .map_err(crate::js::err)?;
 
     Ok(NewServerCoin {
-        coin_spends: result.coin_spends
+        coin_spends: result
+            .coin_spends
             .into_iter()
             .map(|c| c.to_js())
             .collect::<Result<Vec<CoinSpend>>>()?,
@@ -1357,7 +1363,9 @@ pub fn secret_key_to_public_key(secret_key: Buffer) -> napi::Result<Buffer> {
 /// @returns {Promise<String>} The converted address.
 pub fn puzzle_hash_to_address(puzzle_hash: Buffer, prefix: String) -> napi::Result<String> {
     let puzzle_hash = RustBytes32::from_js(puzzle_hash)?;
-    Address::new(puzzle_hash, prefix).encode().map_err(crate::js::err)
+    Address::new(puzzle_hash, prefix)
+        .encode()
+        .map_err(crate::js::err)
 }
 
 #[napi]
@@ -1894,7 +1902,7 @@ pub fn simulator_new_blspair(value: BigInt) -> napi::Result<crate::js::BlsPair> 
 /// @returns {Promise<Buffer>} The program.
 pub fn simulator_new_program(pk: Buffer) -> napi::Result<Buffer> {
     let pk = RustPublicKey::from_js(pk)?;
-    let program =
-        to_program([AggSigMe::new(pk, b"Hello, world!".to_vec().into())]).map_err(crate::js::err)?;
+    let program = to_program([AggSigMe::new(pk, b"Hello, world!".to_vec().into())])
+        .map_err(crate::js::err)?;
     program.to_js()
 }
