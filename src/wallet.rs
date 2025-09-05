@@ -1452,7 +1452,7 @@ pub async fn generate_did_proof_from_chain(
         .ok_or(WalletError::UnknownCoin)?;
 
     let _parent_spend = peer
-        .request_puzzle_and_solution(parent_coin_state.coin.coin_id(), parent_spend_height as u32)
+        .request_puzzle_and_solution(parent_coin_state.coin.coin_id(), parent_spend_height)
         .await?
         .map_err(|_| WalletError::RejectPuzzleSolution)?;
 
@@ -1591,7 +1591,7 @@ pub async fn resolve_did_string_and_generate_proof(
         .ok_or(WalletError::UnknownCoin)?;
 
     let launcher_spend = peer
-        .request_puzzle_and_solution(launcher_state.coin.coin_id(), launcher_spend_height as u32)
+        .request_puzzle_and_solution(launcher_state.coin.coin_id(), launcher_spend_height)
         .await?
         .map_err(|_| WalletError::RejectPuzzleSolution)?;
 
@@ -1660,7 +1660,7 @@ pub async fn resolve_did_string_and_generate_proof(
         // If spent, find the child DID coin
         let spend_height = coin_state.spent_height.unwrap();
         let spend = peer
-            .request_puzzle_and_solution(current_did_coin.coin_id(), spend_height as u32)
+            .request_puzzle_and_solution(current_did_coin.coin_id(), spend_height)
             .await?
             .map_err(|_| WalletError::RejectPuzzleSolution)?;
 
