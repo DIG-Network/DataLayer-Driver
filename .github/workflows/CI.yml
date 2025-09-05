@@ -53,26 +53,26 @@ jobs:
         settings:
           - host: macos-latest
             target: x86_64-apple-darwin
-            build: cd napi && yarn build --target x86_64-apple-darwin
+            build: cd napi && npm run build -- --target x86_64-apple-darwin
           - host: windows-latest
-            build: cd napi && yarn build --target x86_64-pc-windows-msvc
+            build: cd napi && npm run build -- --target x86_64-pc-windows-msvc
             target: x86_64-pc-windows-msvc
           - host: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-debian
             build: |
               set -e && 
-              cd /build/napi && yarn build --target x86_64-unknown-linux-gnu &&
+              cd /build/napi && npm install && npm run build -- --target x86_64-unknown-linux-gnu &&
               strip /build/napi/*.node
           - host: macos-latest
             target: aarch64-apple-darwin
-            build: cd napi && yarn build --target aarch64-apple-darwin
+            build: cd napi && npm run build -- --target aarch64-apple-darwin
           - host: ubuntu-latest
             target: aarch64-unknown-linux-gnu
             docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-debian-aarch64
             build: |
               set -e && 
-              cd /build/napi && yarn build --target aarch64-unknown-linux-gnu
+              cd /build/napi && npm install && npm run build -- --target aarch64-unknown-linux-gnu
     name: stable - ${{ matrix.settings.target }} - node@20
     runs-on: ${{ matrix.settings.host }}
     steps:
@@ -82,7 +82,8 @@ jobs:
         if: ${{ !matrix.settings.docker }}
         with:
           node-version: 20
-          cache: yarn
+          cache: npm
+          cache-dependency-path: napi/package-lock.json
       - name: Install
         uses: dtolnay/rust-toolchain@stable
         if: ${{ !matrix.settings.docker }}
@@ -109,16 +110,17 @@ jobs:
         shell: bash
       - name: Setup node x86
         if: matrix.settings.target == 'i686-pc-windows-msvc'
-        run: yarn config set supportedArchitectures.cpu "ia32"
+        run: npm config set target_arch ia32
         shell: bash
       - name: Install dependencies
-        run: cd napi && yarn install
+        run: cd napi && npm install
       - name: Setup node x86
         uses: actions/setup-node@v4
         if: matrix.settings.target == 'i686-pc-windows-msvc'
         with:
           node-version: 20
-          cache: yarn
+          cache: npm
+          cache-dependency-path: napi/package-lock.json
           architecture: x86
       - name: Build in docker
         uses: addnab/docker-run-action@v3
@@ -160,10 +162,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
-          cache: yarn
+          cache: npm
+          cache-dependency-path: napi/package-lock.json
           architecture: x64
       - name: Install dependencies
-        run: cd napi && yarn install
+        run: cd napi && npm install
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
@@ -173,7 +176,7 @@ jobs:
         run: ls -R .
         shell: bash
       - name: Test bindings
-        run: cd napi && yarn test
+        run: cd napi && npm test
 
   test-linux-x64-gnu-binding:
     name: Test bindings on Linux-x64-gnu - node@${{ matrix.node }}
@@ -192,9 +195,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
-          cache: yarn
+          cache: npm
+          cache-dependency-path: napi/package-lock.json
       - name: Install dependencies
-        run: cd napi && yarn install
+        run: cd napi && npm install
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
@@ -204,7 +208,7 @@ jobs:
         run: ls -R .
         shell: bash
       - name: Test bindings
-        run: docker run --rm -v $(pwd):/build -w /build node:${{ matrix.node }}-slim sh -c "cd napi && yarn test"
+        run: docker run --rm -v $(pwd):/build -w /build node:${{ matrix.node }}-slim sh -c "cd napi && npm install && npm test"
 
   test-linux-aarch64-gnu-binding:
     name: Test bindings on aarch64-unknown-linux-gnu - node@${{ matrix.node }}
@@ -229,9 +233,8 @@ jobs:
         shell: bash
       - name: Install dependencies
         run: |
-          yarn config set supportedArchitectures.cpu "arm64"
-          yarn config set supportedArchitectures.libc "glibc"
-          cd napi && yarn install
+          npm config set target_arch arm64
+          cd napi && npm install
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
         with:
@@ -244,7 +247,7 @@ jobs:
           options: '--platform linux/arm64 -v ${{ github.workspace }}:/build -w /build'
           run: |
             set -e
-            cd napi && yarn test
+            cd napi && npm install && npm test
             ls -la
 
   publish:
@@ -260,13 +263,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: yarn
+          cache: npm
+          cache-dependency-path: napi/package-lock.json
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
       - name: Install dependencies
         run: |
           cd napi
-          yarn install
+          npm install
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -274,7 +278,7 @@ jobs:
       - name: Move artifacts
         run: |
           cd napi
-          yarn artifacts
+          npm run artifacts
       - name: List packages
         run: ls -R ./napi/npm
         shell: bash

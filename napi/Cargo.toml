@@ -7,7 +7,6 @@ publish = false
 
 [lib]
 crate-type = ["cdylib"]
-name = "datalayer_driver"
 
 [dependencies]
 datalayer-driver = { path = ".." }
