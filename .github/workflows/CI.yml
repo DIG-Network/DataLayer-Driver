@@ -171,9 +171,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: bindings-${{ matrix.settings.target }}
-          path: .
+          path: napi
       - name: List packages
-        run: ls -R .
+        run: |
+          echo "Root directory:"
+          ls -la
+          echo "NAPI directory:"
+          ls -la napi/
         shell: bash
       - name: Test bindings
         run: cd napi && npm test
@@ -203,12 +207,16 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: bindings-x86_64-unknown-linux-gnu
-          path: .
+          path: napi
       - name: List packages
-        run: ls -R .
+        run: |
+          echo "Root directory:"
+          ls -la
+          echo "NAPI directory:"
+          ls -la napi/
         shell: bash
       - name: Test bindings
-        run: docker run --rm -v $(pwd):/build -w /build node:${{ matrix.node }}-slim sh -c "cd napi && npm install && npm test"
+        run: docker run --rm -v $(pwd):/build -w /build/napi node:${{ matrix.node }}-slim sh -c "npm install && npm test"
 
   test-linux-aarch64-gnu-binding:
     name: Test bindings on aarch64-unknown-linux-gnu - node@${{ matrix.node }}
@@ -227,9 +235,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: bindings-aarch64-unknown-linux-gnu
-          path: .
+          path: napi
       - name: List packages
-        run: ls -R .
+        run: |
+          echo "Root directory:"
+          ls -la
+          echo "NAPI directory:"
+          ls -la napi/
         shell: bash
       - name: Install dependencies
         run: |
@@ -247,7 +259,6 @@ jobs:
           run: |
             set -e
             cd napi && npm install && npm test
-            ls -la
 
   publish:
     name: Publish
