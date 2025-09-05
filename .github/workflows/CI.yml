@@ -333,7 +333,7 @@ jobs:
           if git log -1 --pretty=%B | grep "^[0-9]\+\.[0-9]\+\.[0-9]\+$";
           then
             cargo login $CARGO_REGISTRY_TOKEN
-            cargo publish --no-verify
+            cargo publish --no-verify --allow-dirty
           else
             echo "Not a release, skipping crates.io publish"
           fi
