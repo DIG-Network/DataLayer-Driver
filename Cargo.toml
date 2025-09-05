@@ -5,7 +5,7 @@ members = [".", "napi"]
 [package]
 edition = "2021"
 name = "datalayer-driver"
-version = "0.1.49"
+version = "0.1.50"
 license = "MIT"
 authors = ["yakuhito <y@kuhi.to>"]
 homepage = "https://github.com/DIG-Network/DataLayer-Driver"
