@@ -23,7 +23,7 @@ pub use chia_wallet_sdk::driver::{DataStore, DataStoreInfo, DataStoreMetadata, D
 pub use chia_wallet_sdk::utils::Address;
 
 // Re-export async_api and constants modules at the top level for convenience
-pub use async_api::{NetworkType, connect_random, create_tls_connector, connect_peer_rust};
+pub use async_api::{connect_peer_rust, connect_random, create_tls_connector, NetworkType};
 pub use constants::{get_mainnet_genesis_challenge, get_testnet11_genesis_challenge};
 
 // Internal modules
@@ -146,11 +146,16 @@ pub fn send_xch_rust(
     fee: u64,
 ) -> Result<Vec<CoinSpend>> {
     let outputs: Vec<(Bytes32, u64, Vec<Bytes>)> = outputs
-                .iter()
+        .iter()
         .map(|output| (output.puzzle_hash, output.amount, output.memos.clone()))
         .collect();
-    
-    Ok(wallet::send_xch(*synthetic_key, selected_coins, &outputs, fee)?)
+
+    Ok(wallet::send_xch(
+        *synthetic_key,
+        selected_coins,
+        &outputs,
+        fee,
+    )?)
 }
 
 /// Selects coins using the knapsack algorithm (Rust API version).
@@ -177,14 +182,14 @@ pub fn add_fee_rust(
 pub fn sign_coin_spends_rust(
     coin_spends: &[CoinSpend],
     private_keys: &[SecretKey],
-        for_testnet: bool,
+    for_testnet: bool,
 ) -> Result<Signature> {
     Ok(wallet::sign_coin_spends(
         coin_spends.to_vec(),
         private_keys.to_vec(),
-            if for_testnet {
+        if for_testnet {
             wallet::TargetNetwork::Testnet11
-            } else {
+        } else {
             wallet::TargetNetwork::Mainnet
         },
     )?)
@@ -201,7 +206,11 @@ pub fn verify_signed_message_rust(
     public_key: &PublicKey,
     message: &[u8],
 ) -> Result<bool> {
-    Ok(wallet::verify_signature(message.into(), *public_key, signature.clone())?)
+    Ok(wallet::verify_signature(
+        message.into(),
+        *public_key,
+        signature.clone(),
+    )?)
 }
 
 /// Calculates the total cost of coin spends (Rust API version).
@@ -312,17 +321,19 @@ pub fn create_server_coin_rust(
 /// Async functions for blockchain interaction (Rust API versions)
 pub mod async_api {
     use super::*;
-    use chia_wallet_sdk::client::{connect_peer, create_native_tls_connector, load_ssl_cert, PeerOptions};
+    use chia_wallet_sdk::client::{
+        connect_peer, create_native_tls_connector, load_ssl_cert, PeerOptions,
+    };
+    use futures_util::stream::{FuturesUnordered, StreamExt};
+    use rand::seq::SliceRandom;
     use std::net::SocketAddr;
     use tokio::net::lookup_host;
-    use rand::seq::SliceRandom;
-    use futures_util::stream::{FuturesUnordered, StreamExt};
     use tokio::time::{timeout, Duration};
 
     // DNS introducers and default ports for connecting to random peers.
     const MAINNET_DNS_INTRODUCERS: &[&str] = &[
         "dns-introducer.chia.net",
-        "chia.ctrlaltdel.ch", 
+        "chia.ctrlaltdel.ch",
         "seeder.dexie.space",
         "chia.hoffmang.com",
     ];
@@ -387,7 +398,7 @@ pub mod async_api {
                     NetworkType::Testnet11 => "testnet11",
                 };
                 let tls_clone = tls.clone();
-                
+
                 // Spawn connection attempt with timeout
                 futures.push(async move {
                     timeout(
@@ -420,7 +431,10 @@ pub mod async_api {
     }
 
     /// Creates a TLS connector for Chia peer connections (Rust API version).
-    pub fn create_tls_connector(cert_path: &str, key_path: &str) -> Result<chia_wallet_sdk::client::Connector> {
+    pub fn create_tls_connector(
+        cert_path: &str,
+        key_path: &str,
+    ) -> Result<chia_wallet_sdk::client::Connector> {
         let cert = load_ssl_cert(cert_path, key_path)?;
         Ok(create_native_tls_connector(&cert)?)
     }
@@ -446,7 +460,7 @@ pub mod async_api {
 
         Ok(peer)
     }
-    
+
     /// Mints a new NFT using a DID string (Rust API version).
     #[allow(clippy::too_many_arguments)]
     pub async fn mint_nft_rust(
@@ -486,7 +500,7 @@ pub mod async_api {
     pub async fn generate_did_proof_rust(
         peer: &Peer,
         did_coin: Coin,
-    for_testnet: bool,
+        for_testnet: bool,
     ) -> Result<(Proof, Coin)> {
         let network = if for_testnet {
             wallet::TargetNetwork::Testnet11
@@ -503,7 +517,11 @@ pub mod async_api {
         selected_coins: Vec<Coin>,
         fee: u64,
     ) -> Result<(Vec<CoinSpend>, Coin)> {
-        Ok(wallet::create_simple_did(synthetic_key, selected_coins, fee)?)
+        Ok(wallet::create_simple_did(
+            synthetic_key,
+            selected_coins,
+            fee,
+        )?)
     }
 
     /// Synchronizes a datastore (Rust API version).
@@ -585,7 +603,7 @@ pub mod async_api {
 pub mod constants {
     use chia_wallet_sdk::types::{MAINNET_CONSTANTS, TESTNET11_CONSTANTS};
 
-/// Returns the mainnet genesis challenge.
+    /// Returns the mainnet genesis challenge.
     pub fn get_mainnet_genesis_challenge() -> chia::protocol::Bytes32 {
         MAINNET_CONSTANTS.genesis_challenge
     }
@@ -600,7 +618,7 @@ pub mod constants {
 #[cfg(test)]
 mod examples {
     use super::*;
-    
+
     #[test]
     fn example_key_operations() {
         // Example: Generate keys and addresses
@@ -608,20 +626,20 @@ mod examples {
         let public_key = secret_key_to_public_key(&secret_key);
         let _synthetic_key = master_public_key_to_wallet_synthetic_key(&public_key);
         let puzzle_hash = master_public_key_to_first_puzzle_hash(&public_key);
-        
+
         // Convert to address
         let address = puzzle_hash_to_address(puzzle_hash, "xch").unwrap();
         println!("Address: {}", address);
-        
+
         // Convert back
         let decoded_hash = address_to_puzzle_hash(&address).unwrap();
         assert_eq!(puzzle_hash, decoded_hash);
     }
-    
+
     #[tokio::test]
     async fn example_nft_minting() {
         // Example of complete NFT minting workflow using Rust API
-        
+
         /*
         // 1. Connect to a random peer
         let peer = connect_random(
@@ -679,7 +697,7 @@ mod examples {
         // 8. Create and broadcast spend bundle
         let spend_bundle = SpendBundle::new(nft_spends, signature);
         let result = async_api::broadcast_spend_bundle_rust(&peer, spend_bundle).await.unwrap();
-        
+
         println!("NFT minting transaction broadcast: {:?}", result);
         */
     }
