@@ -310,6 +310,24 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Prepare for crates.io publish
+        run: |
+          if git log -1 --pretty=%B | grep "^[0-9]\+\.[0-9]\+\.[0-9]\+$";
+          then
+            echo "Release detected, preparing for crates.io publish"
+            # Ensure Cargo.lock is up to date
+            cargo update --dry-run || true
+            # Check if there are any changes and commit them
+            if ! git diff --quiet Cargo.lock; then
+              echo "Cargo.lock has changes, committing them"
+              git config --local user.email "action@github.com"
+              git config --local user.name "GitHub Action"
+              git add Cargo.lock
+              git commit -m "Update Cargo.lock for release" || true
+            fi
+          else
+            echo "Not a release, skipping crates.io preparation"
+          fi
       - name: Publish to crates.io
         run: |
           if git log -1 --pretty=%B | grep "^[0-9]\+\.[0-9]\+\.[0-9]\+$";
