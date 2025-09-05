@@ -604,9 +604,9 @@ mod examples {
     #[test]
     fn example_key_operations() {
         // Example: Generate keys and addresses
-        let secret_key = SecretKey::from_bytes([1u8; 32]).unwrap();
+        let secret_key = SecretKey::from_bytes(&[1u8; 32]).unwrap();
         let public_key = secret_key_to_public_key(&secret_key);
-        let synthetic_key = master_public_key_to_wallet_synthetic_key(&public_key);
+        let _synthetic_key = master_public_key_to_wallet_synthetic_key(&public_key);
         let puzzle_hash = master_public_key_to_first_puzzle_hash(&public_key);
         
         // Convert to address
