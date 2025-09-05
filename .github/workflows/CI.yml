@@ -53,26 +53,26 @@ jobs:
         settings:
           - host: macos-latest
             target: x86_64-apple-darwin
-            build: yarn build --target x86_64-apple-darwin
+            build: cd napi && yarn build --target x86_64-apple-darwin
           - host: windows-latest
-            build: yarn build --target x86_64-pc-windows-msvc
+            build: cd napi && yarn build --target x86_64-pc-windows-msvc
             target: x86_64-pc-windows-msvc
           - host: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-debian
             build: |
               set -e && 
-              yarn build --target x86_64-unknown-linux-gnu &&
-              strip *.node
+              cd /build/napi && yarn build --target x86_64-unknown-linux-gnu &&
+              strip /build/napi/*.node
           - host: macos-latest
             target: aarch64-apple-darwin
-            build: yarn build --target aarch64-apple-darwin
+            build: cd napi && yarn build --target aarch64-apple-darwin
           - host: ubuntu-latest
             target: aarch64-unknown-linux-gnu
             docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-debian-aarch64
             build: |
               set -e && 
-              yarn build --target aarch64-unknown-linux-gnu
+              cd /build/napi && yarn build --target aarch64-unknown-linux-gnu
     name: stable - ${{ matrix.settings.target }} - node@20
     runs-on: ${{ matrix.settings.host }}
     steps:
@@ -112,7 +112,7 @@ jobs:
         run: yarn config set supportedArchitectures.cpu "ia32"
         shell: bash
       - name: Install dependencies
-        run: yarn install
+        run: cd napi && yarn install
       - name: Setup node x86
         uses: actions/setup-node@v4
         if: matrix.settings.target == 'i686-pc-windows-msvc'
@@ -135,7 +135,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: bindings-${{ matrix.settings.target }}
-          path: ${{ env.APP_NAME }}.*.node
+          path: napi/${{ env.APP_NAME }}.*.node
           if-no-files-found: error
 
   test-macOS-windows-binding:
@@ -163,7 +163,7 @@ jobs:
           cache: yarn
           architecture: x64
       - name: Install dependencies
-        run: yarn install
+        run: cd napi && yarn install
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
@@ -173,7 +173,7 @@ jobs:
         run: ls -R .
         shell: bash
       - name: Test bindings
-        run: yarn test
+        run: cd napi && yarn test
 
   test-linux-x64-gnu-binding:
     name: Test bindings on Linux-x64-gnu - node@${{ matrix.node }}
@@ -194,7 +194,7 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: yarn
       - name: Install dependencies
-        run: yarn install
+        run: cd napi && yarn install
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
@@ -204,7 +204,7 @@ jobs:
         run: ls -R .
         shell: bash
       - name: Test bindings
-        run: docker run --rm -v $(pwd):/build -w /build node:${{ matrix.node }}-slim yarn test
+        run: docker run --rm -v $(pwd):/build -w /build node:${{ matrix.node }}-slim sh -c "cd napi && yarn test"
 
   test-linux-aarch64-gnu-binding:
     name: Test bindings on aarch64-unknown-linux-gnu - node@${{ matrix.node }}
@@ -231,7 +231,7 @@ jobs:
         run: |
           yarn config set supportedArchitectures.cpu "arm64"
           yarn config set supportedArchitectures.libc "glibc"
-          yarn install
+          cd napi && yarn install
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
         with:
@@ -244,7 +244,7 @@ jobs:
           options: '--platform linux/arm64 -v ${{ github.workspace }}:/build -w /build'
           run: |
             set -e
-            yarn test
+            cd napi && yarn test
             ls -la
 
   publish:
@@ -261,19 +261,26 @@ jobs:
         with:
           node-version: 20
           cache: yarn
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
       - name: Install dependencies
-        run: yarn install
+        run: |
+          cd napi
+          yarn install
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          path: artifacts
+          path: napi/artifacts
       - name: Move artifacts
-        run: yarn artifacts
-      - name: List packages
-        run: ls -R ./npm
-        shell: bash
-      - name: Publish
         run: |
+          cd napi
+          yarn artifacts
+      - name: List packages
+        run: ls -R ./napi/npm
+        shell: bash
+      - name: Publish to NPM
+        run: |
+          cd napi
           npm config set provenance true
           if git log -1 --pretty=%B | grep "^[0-9]\+\.[0-9]\+\.[0-9]\+$";
           then
@@ -284,8 +291,19 @@ jobs:
             echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" >> ~/.npmrc
             npm publish --tag next --access public
           else
-            echo "Not a release, skipping publish"
+            echo "Not a release, skipping npm publish"
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Publish to crates.io
+        run: |
+          if git log -1 --pretty=%B | grep "^[0-9]\+\.[0-9]\+\.[0-9]\+$";
+          then
+            cargo login $CARGO_REGISTRY_TOKEN
+            cargo publish --no-verify
+          else
+            echo "Not a release, skipping crates.io publish"
+          fi
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}

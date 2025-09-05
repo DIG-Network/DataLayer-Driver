@@ -310,7 +310,7 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { newLineageProof, newEveProof, Tls, Peer, PeerType, selectCoins, sendXch, morphLauncherId, createServerCoin, mintStore, oracleSpend, addFee, masterPublicKeyToWalletSyntheticKey, masterPublicKeyToFirstPuzzleHash, masterSecretKeyToWalletSyntheticSecretKey, secretKeyToPublicKey, puzzleHashToAddress, addressToPuzzleHash, adminDelegatedPuzzleFromKey, writerDelegatedPuzzleFromKey, oracleDelegatedPuzzle, signCoinSpends, hexSpendBundleToCoinSpends, spendBundleToHex, getCoinId, updateStoreMetadata, updateStoreOwnership, meltStore, signMessage, verifySignedMessage, syntheticKeyToPuzzleHash, getCost, getMainnetGenesisChallenge, getTestnet11GenesisChallenge, simulatorNewPuzzle, simulatorNewBlspair, simulatorNewProgram } = nativeBinding
+const { newLineageProof, newEveProof, Tls, Peer, PeerType, selectCoins, sendXch, morphLauncherId, createServerCoin, mintStore, oracleSpend, addFee, masterPublicKeyToWalletSyntheticKey, masterPublicKeyToFirstPuzzleHash, masterSecretKeyToWalletSyntheticSecretKey, secretKeyToPublicKey, puzzleHashToAddress, addressToPuzzleHash, adminDelegatedPuzzleFromKey, writerDelegatedPuzzleFromKey, oracleDelegatedPuzzle, signCoinSpends, hexSpendBundleToCoinSpends, spendBundleToHex, getCoinId, updateStoreMetadata, updateStoreOwnership, meltStore, signMessage, verifySignedMessage, syntheticKeyToPuzzleHash, getCost, getMainnetGenesisChallenge, getTestnet11GenesisChallenge, mintNft, generateDidProof, generateDidProofManual, generateDidProofFromChain, createSimpleDid, simulatorNewPuzzle, simulatorNewBlspair, simulatorNewProgram } = nativeBinding
 
 module.exports.newLineageProof = newLineageProof
 module.exports.newEveProof = newEveProof
@@ -346,6 +346,11 @@ module.exports.syntheticKeyToPuzzleHash = syntheticKeyToPuzzleHash
 module.exports.getCost = getCost
 module.exports.getMainnetGenesisChallenge = getMainnetGenesisChallenge
 module.exports.getTestnet11GenesisChallenge = getTestnet11GenesisChallenge
+module.exports.mintNft = mintNft
+module.exports.generateDidProof = generateDidProof
+module.exports.generateDidProofManual = generateDidProofManual
+module.exports.generateDidProofFromChain = generateDidProofFromChain
+module.exports.createSimpleDid = createSimpleDid
 module.exports.simulatorNewPuzzle = simulatorNewPuzzle
 module.exports.simulatorNewBlspair = simulatorNewBlspair
 module.exports.simulatorNewProgram = simulatorNewProgram

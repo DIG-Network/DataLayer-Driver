@@ -849,6 +849,26 @@ dependencies = [
  "futures-util",
  "hex",
  "hex-literal",
+ "num-bigint",
+ "openssl",
+ "openssl-sys",
+ "rand",
+ "thiserror 1.0.69",
+ "tokio",
+]
+
+[[package]]
+name = "datalayer-driver-napi"
+version = "0.1.0"
+dependencies = [
+ "chia",
+ "chia-puzzles",
+ "chia-wallet-sdk",
+ "clvmr",
+ "datalayer-driver",
+ "futures-util",
+ "hex",
+ "hex-literal",
  "napi",
  "napi-build",
  "napi-derive",

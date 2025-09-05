@@ -58,6 +58,13 @@ pub struct SuccessResponse {
     pub new_datastore: DataStore,
 }
 
+/// The new server coin and coin spends to create it.
+#[derive(Clone, Debug)]
+pub struct NewServerCoin {
+    pub server_coin: ServerCoin,
+    pub coin_spends: Vec<CoinSpend>,
+}
+
 #[derive(Debug, Error)]
 pub enum WalletError {
     #[error("{0:?}")]
@@ -239,7 +246,7 @@ pub fn create_server_coin(
     uris: Vec<String>,
     amount: u64,
     fee: u64,
-) -> Result<(Vec<CoinSpend>, ServerCoin), WalletError> {
+) -> Result<NewServerCoin, WalletError> {
     let puzzle_hash = StandardArgs::curry_tree_hash(synthetic_key).into();
 
     let mut memos = Vec::with_capacity(uris.len() + 1);
@@ -280,7 +287,10 @@ pub fn create_server_coin(
         memo_urls: uris,
     };
 
-    Ok((ctx.take(), server_coin))
+    Ok(NewServerCoin {
+        coin_spends: ctx.take(),
+        server_coin,
+    })
 }
 
 pub async fn spend_server_coins(

@@ -1,7 +1,87 @@
 # DataLayer-Driver
 
+Native Chia DataLayer Driver for storing and retrieving data in Chia blockchain.
+
+This project provides both Rust library APIs and Node.js bindings for interacting with Chia's DataLayer.
+
+## Installation
+
+### As a Rust Crate
+
+Add to your `Cargo.toml`:
+
+```toml
+[dependencies]
+datalayer-driver = "0.1.0"
+```
+
+### As a Node.js Package
+
+```bash
+npm install datalayer-driver
+# or
+yarn add datalayer-driver
+```
+
+## Rust Usage
+
+```rust
+use datalayer_driver::{
+    Peer, Tls, mint_store, select_coins, sign_coin_spends,
+    master_public_key_to_wallet_synthetic_key, TargetNetwork
+};
+use chia::bls::{SecretKey, PublicKey};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Connect to a Chia node
+    let cert_path = "~/.chia/mainnet/config/ssl/wallet/wallet_node.crt";
+    let key_path = "~/.chia/mainnet/config/ssl/wallet/wallet_node.key";
+    let tls = Tls::new(cert_path, key_path)?;
+    let peer = Peer::new("127.0.0.1:8444", "mainnet", &tls).await?;
+    
+    // Example: Mint a new data store
+    let master_sk = SecretKey::from_bytes(&your_key_bytes)?;
+    let master_pk = master_sk.public_key();
+    let wallet_pk = master_public_key_to_wallet_synthetic_key(&master_pk);
+    
+    // Select coins for the transaction
+    let coins = peer.get_all_unspent_coins(
+        wallet_pk.to_puzzle_hash(),
+        None,
+        genesis_challenge
+    ).await?;
+    
+    let selected_coins = select_coins(coins.coins, amount_needed)?;
+    
+    // Mint the store
+    let response = mint_store(
+        wallet_pk,
+        selected_coins,
+        root_hash,
+        Some("My Store".to_string()),
+        Some("Description".to_string()),
+        None,
+        owner_puzzle_hash,
+        vec![],
+        fee
+    )?;
+    
+    // Sign and broadcast
+    let signature = sign_coin_spends(
+        response.coin_spends,
+        vec![master_sk],
+        TargetNetwork::Mainnet
+    )?;
+    
+    Ok(())
+}
+```
+
+## Node.js Usage
+
 A collection of functions that can be used to interact with datastores on the Chia blockchain.
-cd
+
 This library offers the following functions:
 
 - wallet: `selectCoins`, `addFee`, `signCoinSpends`, `sendXch`

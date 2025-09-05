@@ -1,20 +1,21 @@
+[workspace]
+resolver = "2"
+members = [".", "napi"]
+
 [package]
 edition = "2021"
 name = "datalayer-driver"
-version = "0.1.0"
+version = "0.1.38"
 license = "MIT"
 authors = ["yakuhito <y@kuhi.to>"]
 homepage = "https://github.com/DIG-Network/DataLayer-Driver"
 repository = "https://github.com/DIG-Network/DataLayer-Driver"
-
-[lib]
-crate-type = ["cdylib"]
+description = "Native Chia DataLayer Driver for storing and retrieving data in Chia blockchain"
+readme = "README.md"
+keywords = ["chia", "blockchain", "datalayer", "storage", "web3"]
+categories = ["cryptography::cryptocurrencies", "web-programming"]
 
 [dependencies]
-# Default enable napi4 feature, see https://nodejs.org/api/n-api.html#node-api-version-matrix
-napi = { version = "2.12.2", default-features = false, features = ["napi6", "async"] }
-napi-derive = "2.12.2"
-
 chia = "0.22.0"
 chia-puzzles = "0.20.1"
 thiserror = "1.0.61"
@@ -42,9 +43,6 @@ openssl-sys = { version = "0.9.102", features = ["vendored"] }
 [target.x86_64-unknown-linux-musl.dependencies]
 openssl = { version = "0.10.64", features = ["vendored"] }
 openssl-sys = { version = "0.9.102", features = ["vendored"] }
-
-[build-dependencies]
-napi-build = "2.0.1"
 
 [profile.release]
 lto = true

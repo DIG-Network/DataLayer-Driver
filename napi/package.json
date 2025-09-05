@@ -1,0 +1,46 @@
+{
+  "name": "@dignetwork/datalayer-driver",
+  "version": "0.1.38",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/DIG-Network/DataLayer-Driver"
+  },
+  "napi": {
+    "name": "datalayer-driver",
+    "triples": {
+      "additional": [
+        "aarch64-apple-darwin",
+        "aarch64-unknown-linux-gnu"
+      ]
+    }
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@napi-rs/cli": "^2.18.4",
+    "@types/node": "^24.3.1",
+    "ava": "^6.0.1"
+  },
+  "ava": {
+    "timeout": "3m"
+  },
+  "engines": {
+    "node": ">= 10"
+  },
+  "scripts": {
+    "artifacts": "napi artifacts",
+    "build": "napi build --platform --release",
+    "build:debug": "napi build --platform",
+    "prepublishOnly": "napi prepublish -t npm",
+    "test": "ava",
+    "universal": "napi universal",
+    "version": "napi version",
+    "bump:patch": "node ../scripts/sync-version.js patch",
+    "bump:minor": "node ../scripts/sync-version.js minor",
+    "bump:major": "node ../scripts/sync-version.js major",
+    "bump:version": "node ../scripts/sync-version.js",
+    "check:versions": "node ../scripts/check-versions.js"
+  },
+  "packageManager": "yarn@4.3.1"
+}

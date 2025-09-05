@@ -1,0 +1,9 @@
+[package]
+name = "test-datalayer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+datalayer-driver = { path = "../DataLayer-Driver" }
+tokio = { version = "1.39", features = ["full"] }
+hex = "0.4"

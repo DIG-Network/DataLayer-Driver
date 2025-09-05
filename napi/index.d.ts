@@ -103,6 +103,38 @@ export interface BlsPair {
   pk: Buffer
   puzzleHash: Buffer
 }
+/** Represents the result of generating a DID proof. */
+export interface DidProofResult {
+  proof: Proof
+  didCoin: Coin
+}
+/** Represents the result of creating a simple DID. */
+export interface CreateDidResult {
+  coinSpends: Array<CoinSpend>
+  didCoin: Coin
+}
+/**
+ * Represents NFT metadata.
+ *
+ * @property {Array<string>} dataUris - List of data URIs.
+ * @property {Buffer} dataHash - Hash of the data (optional).
+ * @property {Array<string>} metadataUris - List of metadata URIs.
+ * @property {Buffer} metadataHash - Hash of the metadata (optional).
+ * @property {Array<string>} licenseUris - List of license URIs.
+ * @property {Buffer} licenseHash - Hash of the license (optional).
+ * @property {BigInt} editionNumber - Edition number (optional).
+ * @property {BigInt} editionTotal - Total number of editions (optional).
+ */
+export interface NftMetadata {
+  dataUris: Array<string>
+  dataHash?: Buffer
+  metadataUris: Array<string>
+  metadataHash?: Buffer
+  licenseUris: Array<string>
+  licenseHash?: Buffer
+  editionNumber?: bigint
+  editionTotal?: bigint
+}
 /**
  * Creates a new lineage proof.
  *
@@ -454,6 +486,58 @@ export declare function getMainnetGenesisChallenge(): Buffer
  * @returns {Buffer} The testnet11 genesis challenge.
  */
 export declare function getTestnet11GenesisChallenge(): Buffer
+/**
+ * Mints a new NFT using a DID string.
+ *
+ * @param {Peer} peer - The peer to query blockchain data
+ * @param {Buffer} syntheticKey - The synthetic key of the wallet
+ * @param {Vec<Coin>} selectedCoins - Coins to spend for the transaction
+ * @param {string} didString - The DID string (e.g., "did:chia:1s8j4pquxfu5mhlldzu357qfqkwa9r35mdx5a0p0ehn76dr4ut4tqs0n6kv")
+ * @param {Buffer} recipientPuzzleHash - The puzzle hash to send the NFT to
+ * @param {NftMetadata} metadata - The NFT metadata
+ * @param {Buffer} royaltyPuzzleHash - Optional royalty puzzle hash (defaults to recipient if None)
+ * @param {number} royaltyBasisPoints - Royalty percentage in basis points (e.g., 300 = 3%)
+ * @param {BigInt} fee - Transaction fee
+ * @param {boolean} forTestnet - Whether to use testnet or mainnet (defaults to mainnet)
+ * @returns {Promise<Vec<CoinSpend>>} A vector of coin spends that mint the NFT
+ */
+export declare function mintNft(peer: Peer, syntheticKey: Buffer, selectedCoins: Array<Coin>, didString: string, recipientPuzzleHash: Buffer, metadata: NftMetadata, royaltyPuzzleHash: Buffer | undefined | null, royaltyBasisPoints: number, fee: bigint, forTestnet?: boolean | undefined | null): Promise<Array<CoinSpend>>
+/**
+ * Generates a DID proof for a DID coin by analyzing its parent automatically.
+ *
+ * @param {Peer} peer - The peer to query blockchain data
+ * @param {Coin} didCoin - The DID coin to generate proof for
+ * @param {boolean} forTestnet - Whether to use testnet or mainnet
+ * @returns {Promise<DidProofResult>} An object containing the proof and the DID coin
+ */
+export declare function generateDidProof(peer: Peer, didCoin: Coin, forTestnet: boolean): Promise<DidProofResult>
+/**
+ * Generates a DID proof manually when you have the parent information.
+ *
+ * @param {Coin} didCoin - The current DID coin
+ * @param {Coin} parentCoin - The parent coin of the DID (null for eve proof)
+ * @param {Buffer} parentInnerPuzzleHash - The parent's inner puzzle hash (for lineage proof)
+ * @returns {Proof} A DID proof that can be used to spend the DID coin
+ */
+export declare function generateDidProofManual(didCoin: Coin, parentCoin?: Coin | undefined | null, parentInnerPuzzleHash?: Buffer | undefined | null): Proof
+/**
+ * Generates a DID proof from the blockchain by analyzing the parent spend.
+ *
+ * @param {Peer} peer - The peer to query blockchain data
+ * @param {Coin} didCoin - The DID coin to generate proof for
+ * @param {boolean} forTestnet - Whether to use testnet or mainnet
+ * @returns {Promise<Proof>} A DID proof that can be used to spend the DID coin
+ */
+export declare function generateDidProofFromChain(peer: Peer, didCoin: Coin, forTestnet: boolean): Promise<Proof>
+/**
+ * Creates a simple DID from a private key and selected coins.
+ *
+ * @param {Buffer} syntheticKey - The synthetic key that will control the DID
+ * @param {Vec<Coin>} selectedCoins - Coins to spend for creating the DID
+ * @param {BigInt} fee - Transaction fee
+ * @returns {CreateDidResult} An object containing coinSpends and the created DID coin
+ */
+export declare function createSimpleDid(syntheticKey: Buffer, selectedCoins: Array<Coin>, fee: bigint): CreateDidResult
 /**
  * Creates a new puzzle and its hash using the simulator.
  *
