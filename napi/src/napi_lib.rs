@@ -86,11 +86,13 @@ pub fn new_eve_proof(eve_proof: EveProof) -> Proof {
 /// @property {Option<String>} label - Label (optional).
 /// @property {Option<String>} description - Description (optional).
 /// @property {Option<BigInt>} bytes - Size of the store in bytes (optional).
+/// @property {Option<Buffer>} sizeProof - Proof of the size (optional).
 pub struct DataStoreMetadata {
     pub root_hash: Buffer,
     pub label: Option<String>,
     pub description: Option<String>,
     pub bytes: Option<BigInt>,
+    pub size_proof: Option<Buffer>,
 }
 
 impl FromJs<DataStoreMetadata> for RustDataStoreMetadata {
@@ -101,6 +103,11 @@ impl FromJs<DataStoreMetadata> for RustDataStoreMetadata {
             description: value.description,
             bytes: if let Some(bytes) = value.bytes {
                 Some(u64::from_js(bytes)?)
+            } else {
+                None
+            },
+            size_proof: if let Some(size_proof) = value.size_proof {
+                Some(RustBytes32::from_js(size_proof)?)
             } else {
                 None
             },
@@ -116,6 +123,11 @@ impl ToJs<DataStoreMetadata> for RustDataStoreMetadata {
             description: self.description.clone(),
             bytes: if let Some(bytes) = self.bytes {
                 Some(bytes.to_js()?)
+            } else {
+                None
+            },
+            size_proof: if let Some(size_proof) = self.size_proof {
+                Some(size_proof.to_js()?)
             } else {
                 None
             },
@@ -1204,6 +1216,7 @@ pub fn create_server_coin(
 /// @param {Option<String>} label - Store label (optional).
 /// @param {Option<String>} description - Store description (optional).
 /// @param {Option<BigInt>} bytes - Store size in bytes (optional).
+/// @param {Option<Buffer>} sizeProof - Proof of the size (optional).
 /// @param {Buffer} ownerPuzzleHash - Owner puzzle hash.
 /// @param {Vec<DelegatedPuzzle>} delegatedPuzzles - Delegated puzzles.
 /// @param {BigInt} fee - Fee to use for the transaction. Total amount - 1 - fee will be sent back to the minter.
@@ -1215,6 +1228,7 @@ pub fn mint_store(
     label: Option<String>,
     description: Option<String>,
     bytes: Option<BigInt>,
+    size_proof: Option<Buffer>,
     owner_puzzle_hash: Buffer,
     delegated_puzzles: Vec<DelegatedPuzzle>,
     fee: BigInt,
@@ -1230,6 +1244,11 @@ pub fn mint_store(
         description,
         if let Some(bytes) = bytes {
             Some(u64::from_js(bytes)?)
+        } else {
+            None
+        },
+        if let Some(size_proof) = size_proof {
+            Some(RustBytes32::from_js(size_proof)?)
         } else {
             None
         },
@@ -1489,6 +1508,7 @@ pub fn get_coin_id(coin: Coin) -> napi::Result<Buffer> {
 /// @param {Option<String>} newLabel - New label (optional).
 /// @param {Option<String>} newDescription - New description (optional).
 /// @param {Option<BigInt>} newBytes - New size in bytes (optional).
+/// @param {Option<Buffer>} newSizeProof - New size proof (optional).
 /// @param {Option<Buffer>} ownerPublicKey - Owner public key.
 /// @param {Option<Buffer>} adminPublicKey - Admin public key.
 /// @param {Option<Buffer>} writerPublicKey - Writer public key.
@@ -1499,6 +1519,7 @@ pub fn update_store_metadata(
     new_label: Option<String>,
     new_description: Option<String>,
     new_bytes: Option<BigInt>,
+    new_size_proof: Option<Buffer>,
     owner_public_key: Option<Buffer>,
     admin_public_key: Option<Buffer>,
     writer_public_key: Option<Buffer>,
@@ -1525,6 +1546,11 @@ pub fn update_store_metadata(
         new_description,
         if let Some(bytes) = new_bytes {
             Some(u64::from_js(bytes)?)
+        } else {
+            None
+        },
+        if let Some(size_proof) = new_size_proof {
+            Some(RustBytes32::from_js(size_proof)?)
         } else {
             None
         },
