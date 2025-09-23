@@ -227,7 +227,7 @@ pub fn mint_store(
     label: Option<String>,
     description: Option<String>,
     bytes: Option<u64>,
-    size_proof: Option<Bytes32>,
+    size_proof: Option<String>,
     owner_puzzle_hash: Bytes32,
     delegated_puzzles: Vec<DelegatedPuzzle>,
     fee: u64,
@@ -269,8 +269,8 @@ pub fn update_store_metadata(
     new_label: Option<String>,
     new_description: Option<String>,
     new_bytes: Option<u64>,
-    new_size_proof: Option<Bytes32>,
-    inner_spend_info: wallet::DataStoreInnerSpend,
+    new_size_proof: Option<String>,
+    inner_spend_info: DataStoreInnerSpend,
 ) -> Result<SuccessResponse> {
     Ok(wallet::update_store_metadata(
         store,

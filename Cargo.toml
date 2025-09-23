@@ -16,17 +16,18 @@ keywords = ["chia", "blockchain", "datalayer", "storage", "web3"]
 categories = ["cryptography::cryptocurrencies", "web-programming"]
 
 [dependencies]
-chia = "0.22.0"
+chia = "0.26.0"
 chia-puzzles = "0.20.1"
 thiserror = "1.0.61"
-clvmr = "0.13.1"
+clvmr = "0.14.0"
 tokio = "1.39.3"
-chia-wallet-sdk = { version = "0.24.0", features = ["chip-0035", "native-tls", "peer-simulator"] }
+chia-wallet-sdk = { version = "0.29.0", features = ["chip-0035", "native-tls", "peer-simulator"] }
 hex-literal = "0.4.1"
 num-bigint = "0.4.6"
 hex = "0.4.3"
 rand = "0.8"
 futures-util = "0.3"
+clvm-traits = "0.26.0"
 
 [target.aarch64-unknown-linux-gnu.dependencies]
 openssl = { version = "0.10.64", features = ["vendored"] }

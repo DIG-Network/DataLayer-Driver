@@ -6,12 +6,12 @@ use chia::clvm_traits::{clvm_tuple, FromClvm, ToClvm};
 use chia::clvm_utils::tree_hash;
 use chia::consensus::{
     consensus_constants::ConsensusConstants,
-    gen::{
-        flags::DONT_VALIDATE_SIGNATURE, flags::MEMPOOL_MODE,
-        owned_conditions::OwnedSpendBundleConditions, run_block_generator::run_block_generator,
-        solution_generator::solution_generator, validation_error::ValidationErr,
-    },
 };
+use chia::consensus::flags::{DONT_VALIDATE_SIGNATURE, MEMPOOL_MODE};
+use chia::consensus::owned_conditions::OwnedSpendBundleConditions;
+use chia::consensus::run_block_generator::run_block_generator;
+use chia::consensus::solution_generator::solution_generator;
+use chia::consensus::validation_error::ValidationErr;
 use chia::protocol::{
     Bytes, Bytes32, Coin, CoinSpend, CoinState, CoinStateFilters, RejectHeaderRequest,
     RequestBlockHeader, RequestFeeEstimates, RespondBlockHeader, RespondFeeEstimates, SpendBundle,
@@ -24,11 +24,8 @@ use chia::puzzles::{
 };
 use chia_puzzles::SINGLETON_LAUNCHER_HASH;
 use chia_wallet_sdk::client::{ClientError, Peer};
-use chia_wallet_sdk::driver::{
-    get_merkle_tree, DataStore, DataStoreMetadata, DelegatedPuzzle, Did, DidInfo, DriverError,
-    IntermediateLauncher, Launcher, Layer, NftMint, OracleLayer, SpendContext, SpendWithConditions,
-    StandardLayer, WriterLayer,
-};
+use chia_wallet_sdk::driver::{get_merkle_tree, DataStore, DataStoreMetadata, DelegatedPuzzle, Did, DidInfo, DriverError, HashedPtr, IntermediateLauncher, Launcher, Layer, NftMint, OracleLayer, SpendContext, SpendWithConditions, StandardLayer, WriterLayer};
+use chia_wallet_sdk::driver::SpendKind;
 // Import proof types from our own crate's rust module
 use crate::rust::{EveProof, LineageProof, Proof};
 use chia_wallet_sdk::signer::{AggSigConstants, RequiredSignature, SignerError};
@@ -39,6 +36,7 @@ use chia_wallet_sdk::types::{
 };
 use chia_wallet_sdk::utils::{self, CoinSelectionError};
 use clvmr::Allocator;
+use futures_util::stream::All;
 use hex_literal::hex;
 use thiserror::Error;
 
@@ -195,7 +193,7 @@ fn spend_coins_together(
             let mut conditions = extra_conditions.clone();
 
             if change > 0 {
-                conditions = conditions.create_coin(change_puzzle_hash, change, None);
+                conditions = conditions.create_coin(change_puzzle_hash, change, Memos::None);
             }
 
             p2.spend(ctx, coin, conditions)?;
@@ -223,7 +221,7 @@ pub fn send_xch(
 
     for output in outputs {
         let memos = ctx.alloc(&output.2)?;
-        conditions = conditions.create_coin(output.0, output.1, Some(Memos::new(memos)));
+        conditions = conditions.create_coin(output.0, output.1, Memos::Some(memos));
         total_amount += output.1;
     }
 
@@ -264,7 +262,7 @@ pub fn create_server_coin(
         .create_coin(
             MirrorArgs::curry_tree_hash().into(),
             amount,
-            Some(Memos::new(memos)),
+            Memos::Some(memos),
         )
         .reserve_fee(fee);
 
@@ -435,7 +433,7 @@ pub fn mint_store(
     label: Option<String>,
     description: Option<String>,
     bytes: Option<u64>,
-    size_proof: Option<Bytes32>,
+    size_proof: Option<String>,
     owner_puzzle_hash: Bytes32,
     delegated_puzzles: Vec<DelegatedPuzzle>,
     fee: u64,
@@ -467,12 +465,12 @@ pub fn mint_store(
             label,
             description,
             bytes,
+            size_proof
         },
         owner_puzzle_hash.into(),
         delegated_puzzles,
     )?;
 
-    // patch: add static hint to launcher
     let launch_singleton = Conditions::new().extend(
         launch_singleton
             .into_iter()
@@ -484,7 +482,7 @@ pub fn mint_store(
                         return Ok(Condition::CreateCoin(CreateCoin {
                             puzzle_hash: cc.puzzle_hash,
                             amount: cc.amount,
-                            memos: Some(hint),
+                            memos: hint,
                         }));
                     }
 
@@ -496,13 +494,14 @@ pub fn mint_store(
             .collect::<Result<Vec<_>, WalletError>>()?,
     );
 
+
     let lead_coin_conditions = if total_amount_from_coins > total_amount {
         let hint = ctx.hint(minter_puzzle_hash)?;
 
         launch_singleton.create_coin(
             minter_puzzle_hash,
             total_amount_from_coins - total_amount,
-            Some(hint),
+            hint,
         )
     } else {
         launch_singleton
@@ -827,7 +826,7 @@ pub fn update_store_metadata(
     new_label: Option<String>,
     new_description: Option<String>,
     new_bytes: Option<u64>,
-    new_size_proof: Option<Bytes32>,
+    new_size_proof: Option<String>,
     inner_spend_info: DataStoreInnerSpend,
 ) -> Result<SuccessResponse, WalletError> {
     let ctx = &mut SpendContext::new();
@@ -837,6 +836,7 @@ pub fn update_store_metadata(
         label: new_label,
         description: new_description,
         bytes: new_bytes,
+        size_proof: new_size_proof
     };
     let mut new_metadata_condition = Conditions::new().with(
         DataStore::<DataStoreMetadata>::new_metadata_condition(ctx, new_metadata)?,
@@ -933,7 +933,7 @@ pub fn oracle_spend(
         lead_coin_conditions = lead_coin_conditions.create_coin(
             spender_puzzle_hash,
             total_amount_from_coins - total_amount,
-            Some(hint),
+            hint,
         );
     }
     if fee > 0 {
@@ -989,7 +989,7 @@ pub fn add_fee(
         lead_coin_conditions = lead_coin_conditions.create_coin(
             spender_puzzle_hash,
             total_amount_from_coins - fee,
-            Some(hint),
+            hint,
         );
     }
     for coin_id in coin_ids {
@@ -1303,8 +1303,11 @@ pub async fn mint_nft(
     let public_key_bytes = synthetic_key.derive_synthetic().to_bytes();
     let mut public_key_hash = [0u8; 32];
     public_key_hash.copy_from_slice(&public_key_bytes[..32]);
-    let did_info: DidInfo<Vec<u8>> =
-        DidInfo::new(did_coin.coin_id(), None, 1, vec![], public_key_hash.into());
+    let mut meta_data_allocator = Allocator::new();
+    let node_metadata = metadata.to_clvm(&mut meta_data_allocator)?;
+    let metadata_hashed_ptr = HashedPtr::from_ptr(&meta_data_allocator, node_metadata);
+    let did_info: DidInfo =
+        DidInfo::new(did_coin.coin_id(), None, 1, metadata_hashed_ptr, public_key_hash.into());
 
     let did = Did::new(did_coin, did_proof, did_info);
 
@@ -1313,7 +1316,7 @@ pub async fn mint_nft(
 
     // Create the NFT mint configuration with metadata
     let nft_mint = NftMint::new(
-        metadata,
+        metadata_hashed_ptr,
         recipient_puzzle_hash,
         royalty_basis_points,
         None, // No DID owner for now - we'll set this up differently
@@ -1322,7 +1325,7 @@ pub async fn mint_nft(
     // Use IntermediateLauncher to mint the NFT
     let (mint_conditions, _nft) = IntermediateLauncher::new(did_coin.coin_id(), 0, 1)
         .create(&mut ctx)?
-        .mint_nft(&mut ctx, nft_mint)?;
+        .mint_nft(&mut ctx, &nft_mint)?;
 
     // Update the DID with the mint conditions
     let _updated_did = did.update(&mut ctx, &p2, mint_conditions)?;
@@ -1515,7 +1518,7 @@ pub fn create_simple_did(
 
             if change > 0 {
                 let hint = ctx.hint(puzzle_hash)?;
-                conditions = conditions.create_coin(puzzle_hash, change, Some(hint));
+                conditions = conditions.create_coin(puzzle_hash, change, hint);
             }
 
             if fee > 0 {
