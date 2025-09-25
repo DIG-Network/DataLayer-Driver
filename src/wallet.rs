@@ -1,3 +1,4 @@
+#![allow(clippy::result_large_err)]
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -25,7 +26,6 @@ use chia::puzzles::{
 use chia_puzzles::SINGLETON_LAUNCHER_HASH;
 use chia_wallet_sdk::client::{ClientError, Peer};
 use chia_wallet_sdk::driver::{get_merkle_tree, DataStore, DataStoreMetadata, DelegatedPuzzle, Did, DidInfo, DriverError, HashedPtr, IntermediateLauncher, Launcher, Layer, NftMint, OracleLayer, SpendContext, SpendWithConditions, StandardLayer, WriterLayer};
-use chia_wallet_sdk::driver::SpendKind;
 // Import proof types from our own crate's rust module
 use crate::rust::{EveProof, LineageProof, Proof};
 use chia_wallet_sdk::signer::{AggSigConstants, RequiredSignature, SignerError};
@@ -36,12 +36,12 @@ use chia_wallet_sdk::types::{
 };
 use chia_wallet_sdk::utils::{self, CoinSelectionError};
 use clvmr::Allocator;
-use futures_util::stream::All;
 use hex_literal::hex;
 use thiserror::Error;
 
 use crate::rust::ServerCoin;
 use crate::server_coin::{urls_from_conditions, MirrorArgs, MirrorSolution};
+
 
 /* echo -n 'datastore' | sha256sum */
 pub const DATASTORE_LAUNCHER_HINT: Bytes32 = Bytes32::new(hex!(
@@ -169,7 +169,7 @@ pub async fn get_unspent_coin_states(
 }
 
 pub fn select_coins(coins: Vec<Coin>, total_amount: u64) -> Result<Vec<Coin>, CoinSelectionError> {
-    utils::select_coins(coins.into_iter().collect(), total_amount.into())
+    utils::select_coins(coins.into_iter().collect(), total_amount)
 }
 
 fn spend_coins_together(
@@ -1268,6 +1268,7 @@ pub async fn unsubscribe_from_coin_states(
 ///
 /// # Returns
 /// A vector of coin spends that mint the NFT
+#[allow(clippy::too_many_arguments)]
 pub async fn mint_nft(
     peer: &Peer,
     synthetic_key: PublicKey,
