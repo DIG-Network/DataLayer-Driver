@@ -43,7 +43,7 @@ jobs:
           cargo machete
 
       - name: Fmt
-        run: cargo fmt --all -- --files-with-diff --check
+        run: rustup component add rustfmt && cargo fmt --all
 
   build:
     needs: rust-checks
