@@ -42,7 +42,21 @@ pub trait ToJs<T> {
     fn to_js(&self) -> Result<T>;
 }
 
-impl FromJs<Buffer> for Bytes32 {
+impl ToJs<Buffer> for String {
+    fn to_js(&self) -> Result<Buffer> {
+        Ok(Buffer::from(self.clone()))
+    }
+}
+
+impl FromJs<Buffer> for String {
+    fn from_js(value: Buffer) -> Result<String> {
+        let string = String::from_utf8(value.to_vec())
+            .map_err(|e| Error::from_reason(format!("Invalid UTF-8: {}", e)))?;
+        Ok(string)
+    }
+}
+
+impl FromJs<Buffer> for Bytes32{
     fn from_js(value: Buffer) -> Result<Self> {
         Self::try_from(value.as_ref().to_vec())
             .map_err(|_| js::err(ConversionError::DifferentLength(32)))

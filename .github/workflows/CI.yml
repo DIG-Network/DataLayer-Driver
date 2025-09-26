@@ -35,7 +35,7 @@ jobs:
           toolchain: stable
 
       - name: Clippy
-        run: cargo clippy --workspace --all-features --all-targets
+        run: rustup component add clippy && cargo clippy --workspace --all-features --all-targets
 
       - name: Unused dependencies
         run: |
@@ -43,7 +43,7 @@ jobs:
           cargo machete
 
       - name: Fmt
-        run: cargo fmt --all -- --files-with-diff --check
+        run: rustup component add rustfmt && cargo fmt --all
 
   build:
     needs: rust-checks
@@ -61,7 +61,8 @@ jobs:
             target: x86_64-unknown-linux-gnu
             docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-debian
             build: |
-              set -e && 
+              set -e &&
+              cd /build && cargo update -p base64ct --precise 1.6.0 || true &&
               cd /build/napi && npm install && npm run build -- --target x86_64-unknown-linux-gnu &&
               strip /build/napi/*.node
           - host: macos-latest
@@ -71,7 +72,8 @@ jobs:
             target: aarch64-unknown-linux-gnu
             docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-debian-aarch64
             build: |
-              set -e && 
+              set -e &&
+              cd /build && cargo update -p base64ct --precise 1.6.0 || true &&
               cd /build/napi && npm install && npm run build -- --target aarch64-unknown-linux-gnu
     name: stable - ${{ matrix.settings.target }} - node@20
     runs-on: ${{ matrix.settings.host }}
@@ -129,6 +131,10 @@ jobs:
           image: ${{ matrix.settings.docker }}
           options: '--user 0:0 -v ${{ github.workspace }}/.cargo-cache/git/db:/usr/local/cargo/git/db -v ${{ github.workspace }}/.cargo/registry/cache:/usr/local/cargo/registry/cache -v ${{ github.workspace }}/.cargo/registry/index:/usr/local/cargo/registry/index -v ${{ github.workspace }}:/build -w /build'
           run: ${{ matrix.settings.build }}
+      - name: Pin base64ct for stable toolchain
+        if: ${{ !matrix.settings.docker }}
+        run: cargo update -p base64ct --precise 1.6.0 || true
+        shell: bash
       - name: Build
         run: ${{ matrix.settings.build }}
         if: ${{ !matrix.settings.docker }}

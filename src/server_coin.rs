@@ -1,11 +1,5 @@
 use std::borrow::Cow;
-
-use chia::clvm_traits::{self, FromClvm, ToClvm};
-use chia::clvm_utils::{CurriedProgram, ToTreeHash, TreeHash};
-use chia::protocol::{Bytes, Bytes32, Coin};
-use chia_wallet_sdk::prelude::CreateCoin;
-use chia_wallet_sdk::types::{Condition, Mod};
-use clvmr::Allocator;
+use chia_wallet_sdk::prelude::{Allocator, Bytes, Bytes32, Coin, Condition, CreateCoin, CurriedProgram, Mod, ToTreeHash, TreeHash, Memos, ToClvm, FromClvm};
 use hex_literal::hex;
 use num_bigint::BigInt;
 
@@ -101,7 +95,7 @@ pub fn urls_from_conditions(
         let Condition::CreateCoin(CreateCoin {
             puzzle_hash,
             amount,
-            memos,
+            memos: maybe_memos,
         }) = condition
         else {
             return None;
@@ -111,15 +105,14 @@ pub fn urls_from_conditions(
             return None;
         }
 
-        let memos = if let Some(memos) = memos {
-            Vec::<Bytes>::from_clvm(allocator, memos.value)
+        let memos_vec = match maybe_memos {
+            Memos::Some(node) => Vec::<Bytes>::from_clvm(allocator, *node)
                 .ok()
-                .unwrap_or_default()
-        } else {
-            Vec::new()
+                .unwrap_or_default(),
+            Memos::None => Vec::new(),
         };
 
-        memos
+        memos_vec
             .iter()
             .skip(1)
             .map(|memo| String::from_utf8(memo.as_ref().to_vec()).ok())

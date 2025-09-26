@@ -107,7 +107,7 @@ impl FromJs<DataStoreMetadata> for RustDataStoreMetadata {
                 None
             },
             size_proof: if let Some(size_proof) = value.size_proof {
-                Some(RustBytes32::from_js(size_proof)?)
+                Some(RustBytes32::from_js(size_proof)?.to_string())
             } else {
                 None
             },
@@ -126,7 +126,7 @@ impl ToJs<DataStoreMetadata> for RustDataStoreMetadata {
             } else {
                 None
             },
-            size_proof: if let Some(size_proof) = self.size_proof {
+            size_proof: if let Some(size_proof) = &self.size_proof {
                 Some(size_proof.to_js()?)
             } else {
                 None
@@ -623,8 +623,10 @@ impl Peer {
         let amount = u64::from_js(amount)?;
         match &self.sim {
             Some(sim) => {
-                let coin = sim.lock().await.mint_coin(puzzle_hash, amount).await;
-                coin.to_js()
+                let peer = sim.lock().await;
+                let mut inner = peer.lock().await;
+                let new_coin = inner.new_coin(puzzle_hash, amount);
+                new_coin.to_js()
             }
             None => Err(crate::js::err(
                 "Simulator is not available for this peer type",
@@ -638,7 +640,11 @@ impl Peer {
     /// @returns {Promise<u32>} The current height.
     pub async fn simulator_height(&self) -> napi::Result<u32> {
         match &self.sim {
-            Some(sim) => Ok(sim.lock().await.height().await),
+            Some(sim) => {
+                let peer = sim.lock().await;
+                let inner = peer.lock().await;
+                Ok(inner.height())
+            },
             None => Err(crate::js::err(
                 "Simulator is not available for this peer type",
             )),
@@ -654,10 +660,14 @@ impl Peer {
         let coin_id = RustBytes32::from_js(coin_id)?;
 
         match &self.sim {
-            Some(sim) => match sim.lock().await.coin_state(coin_id).await {
-                Some(state) => Ok(Some(state.to_js()?)),
-                None => Ok(None),
-            },
+            Some(sim) => {
+                let peer = sim.lock().await;
+                let inner = peer.lock().await; // Simulator
+                Ok(inner
+                    .coin_state(coin_id)
+                    .map(|state| state.to_js())
+                    .transpose()?)
+            }
             None => Err(crate::js::err(
                 "Simulator is not available for this peer type",
             )),
@@ -671,7 +681,14 @@ impl Peer {
     /// @returns {Promise<Buffer>} The header hash.
     pub async fn header_hash(&self, height: u32) -> napi::Result<Buffer> {
         match &self.sim {
-            Some(sim) => sim.lock().await.header_hash(height).await.to_js(),
+            Some(sim) => {
+                let peer = sim.lock().await;
+                let inner = peer.lock().await; // Simulator
+                let hh = inner
+                    .header_hash_of(height)
+                    .ok_or_else(|| crate::js::err("No header hash at that height"))?;
+                hh.to_js()
+            }
             None => Err(crate::js::err(
                 "Simulator is not available for this peer type",
             )),
@@ -1248,7 +1265,7 @@ pub fn mint_store(
             None
         },
         if let Some(size_proof) = size_proof {
-            Some(RustBytes32::from_js(size_proof)?)
+            Some(String::from_js(size_proof)?)
         } else {
             None
         },
@@ -1550,7 +1567,7 @@ pub fn update_store_metadata(
             None
         },
         if let Some(size_proof) = new_size_proof {
-            Some(RustBytes32::from_js(size_proof)?)
+            Some(String::from_js(size_proof)?)
         } else {
             None
         },
