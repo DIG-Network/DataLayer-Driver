@@ -723,6 +723,7 @@ pub async fn get_store_creation_height(
         .ok_or(WalletError::UnknownCoin)
 }
 
+#[derive(Clone, Debug)]
 pub enum DataStoreInnerSpend {
     Owner(PublicKey),
     Admin(PublicKey),
