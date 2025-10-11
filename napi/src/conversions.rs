@@ -56,7 +56,7 @@ impl FromJs<Buffer> for String {
     }
 }
 
-impl FromJs<Buffer> for Bytes32{
+impl FromJs<Buffer> for Bytes32 {
     fn from_js(value: Buffer) -> Result<Self> {
         Self::try_from(value.as_ref().to_vec())
             .map_err(|_| js::err(ConversionError::DifferentLength(32)))

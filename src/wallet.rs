@@ -4,11 +4,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use chia::bls::{sign, verify, PublicKey, SecretKey, Signature};
 use chia::clvm_traits::{clvm_tuple, FromClvm, ToClvm};
-use chia::clvm_utils::tree_hash;
-use chia::consensus::{
-    consensus_constants::ConsensusConstants,
-};
+use chia::clvm_utils::{tree_hash, ToTreeHash};
+use chia::consensus::consensus_constants::ConsensusConstants;
 use chia::consensus::flags::{DONT_VALIDATE_SIGNATURE, MEMPOOL_MODE};
+use chia::consensus::opcodes::CREATE_COIN;
 use chia::consensus::owned_conditions::OwnedSpendBundleConditions;
 use chia::consensus::run_block_generator::run_block_generator;
 use chia::consensus::solution_generator::solution_generator;
@@ -23,9 +22,15 @@ use chia::puzzles::{
     standard::{StandardArgs, StandardSolution},
     DeriveSynthetic,
 };
+use chia::ssl::Error::DateRange;
 use chia_puzzles::SINGLETON_LAUNCHER_HASH;
 use chia_wallet_sdk::client::{ClientError, Peer};
-use chia_wallet_sdk::driver::{get_merkle_tree, DataStore, DataStoreMetadata, DelegatedPuzzle, Did, DidInfo, DriverError, HashedPtr, IntermediateLauncher, Launcher, Layer, NftMint, OracleLayer, SpendContext, SpendWithConditions, StandardLayer, WriterLayer};
+use chia_wallet_sdk::driver::{
+    get_merkle_tree, Cat, CatSpend, DataStore, DataStoreMetadata, DelegatedPuzzle, Did, DidInfo,
+    DriverError, HashedPtr, IntermediateLauncher, Launcher, Layer, NftMint, OracleLayer,
+    P2ParentCoin, P2ParentLayer, Puzzle, SpendContext, SpendWithConditions, StandardLayer,
+    WriterLayer,
+};
 // Import proof types from our own crate's rust module
 use crate::rust::{EveProof, LineageProof, Proof};
 use chia_wallet_sdk::signer::{AggSigConstants, RequiredSignature, SignerError};
@@ -35,19 +40,23 @@ use chia_wallet_sdk::types::{
     Condition, Conditions, MAINNET_CONSTANTS, TESTNET11_CONSTANTS,
 };
 use chia_wallet_sdk::utils::{self, CoinSelectionError};
-use clvmr::Allocator;
+use clvm_traits::clvm_quote;
+use clvmr::{Allocator, NodePtr};
 use hex_literal::hex;
 use thiserror::Error;
 
 use crate::rust::ServerCoin;
 use crate::server_coin::{urls_from_conditions, MirrorArgs, MirrorSolution};
 
-
 /* echo -n 'datastore' | sha256sum */
 pub const DATASTORE_LAUNCHER_HINT: Bytes32 = Bytes32::new(hex!(
     "
     aa7e5b234e1d55967bf0a316395a2eab6cb3370332c0f251f0e44a5afb84fc68
     "
+));
+
+pub const DIG_COIN_ASSET_ID: Bytes32 = Bytes32::new(hex!(
+    "a406d3a9de984d03c9591c10d917593b434d5263cabe2b42f6b367df16832f81"
 ));
 
 #[derive(Clone, Debug)]
@@ -233,6 +242,44 @@ pub fn send_xch(
         total_amount.try_into().unwrap(),
         StandardArgs::curry_tree_hash(synthetic_key).into(),
     )?;
+
+    Ok(ctx.take())
+}
+
+pub fn create_dig_collateral_coin_spend(
+    collateral_dig_coins: Vec<Cat>,
+    store: DataStore,
+    synthetic_key: PublicKey,
+    fee: u64,
+) -> Result<Vec<CoinSpend>, WalletError> {
+    let mut collateral_amount = 0_u64;
+    for cat in &collateral_dig_coins {
+        if cat.info.asset_id != DIG_COIN_ASSET_ID {
+            return Err(WalletError::Driver(DriverError::InvalidAssetId));
+        }
+        collateral_amount += cat.coin.amount;
+    }
+    let p2_tail_hash_hash = P2ParentCoin::inner_puzzle_hash(Some(DIG_COIN_ASSET_ID));
+
+    let p2 = StandardLayer::new(synthetic_key);
+    let p2_hash = p2.tree_hash();
+
+    let mut ctx = SpendContext::new();
+    let memos_node_ptr =
+        ctx.alloc::<(Bytes32, Bytes32)>(&clvm_tuple!(p2_hash.into(), store.coin.coin_id()))?;
+    let memos = Memos::Some(memos_node_ptr);
+
+    let conditions = Conditions::new()
+        .create_coin(p2_tail_hash_hash.into(), collateral_amount, memos)
+        .reserve_fee(fee);
+    let cat_inner_spend =
+        StandardLayer::new(synthetic_key).spend_with_conditions(&mut ctx, conditions)?;
+    let cat_spends: Vec<CatSpend> = collateral_dig_coins
+        .into_iter()
+        .map(|cat_coin| CatSpend::new(cat_coin, cat_inner_spend))
+        .collect();
+
+    Cat::spend_all(&mut ctx, &cat_spends)?;
 
     Ok(ctx.take())
 }
@@ -465,7 +512,7 @@ pub fn mint_store(
             label,
             description,
             bytes,
-            size_proof
+            size_proof,
         },
         owner_puzzle_hash.into(),
         delegated_puzzles,
@@ -493,7 +540,6 @@ pub fn mint_store(
             })
             .collect::<Result<Vec<_>, WalletError>>()?,
     );
-
 
     let lead_coin_conditions = if total_amount_from_coins > total_amount {
         let hint = ctx.hint(minter_puzzle_hash)?;
@@ -837,7 +883,7 @@ pub fn update_store_metadata(
         label: new_label,
         description: new_description,
         bytes: new_bytes,
-        size_proof: new_size_proof
+        size_proof: new_size_proof,
     };
     let mut new_metadata_condition = Conditions::new().with(
         DataStore::<DataStoreMetadata>::new_metadata_condition(ctx, new_metadata)?,
@@ -1223,6 +1269,58 @@ pub async fn look_up_possible_launchers(
     })
 }
 
+pub async fn prove_dig_cat_coin(
+    peer: &Peer,
+    allocator: &mut Allocator,
+    coin: &Coin,
+    coin_created_height: u32,
+) -> Result<(Cat, Puzzle, NodePtr), WalletError> {
+    // 1) Request parent coin state
+    let parent_state_response = peer
+        .request_coin_state(
+            vec![coin.parent_coin_info],
+            None,
+            MAINNET_CONSTANTS.genesis_challenge,
+            false,
+        )
+        .await?;
+
+    let parent_state = parent_state_response.map_err(|_| WalletError::RejectCoinState)?;
+
+    // 2) Request parent puzzle and solution
+    let parent_puzzle_and_solution_response = peer
+        .request_puzzle_and_solution(parent_state.coin_ids[0], coin_created_height)
+        .await?;
+
+    let parent_puzzle_and_solution =
+        parent_puzzle_and_solution_response.map_err(|_| WalletError::RejectPuzzleSolution)?;
+
+    // 3) Convert puzzle to CLVM
+    let parent_puzzle_ptr = parent_puzzle_and_solution.puzzle.to_clvm(allocator)?;
+    let parent_puzzle = Puzzle::parse(&allocator, parent_puzzle_ptr);
+
+    // 4) Convert solution to CLVM
+    let parent_solution = parent_puzzle_and_solution.solution.to_clvm(allocator)?;
+
+    // 5) Parse CAT
+    let (cat, puzzle, node_ptr) = Cat::parse(
+        allocator,
+        parent_state.coin_states[0].coin,
+        parent_puzzle,
+        parent_solution,
+    )?
+    .ok_or(WalletError::UnknownCoin)?;
+
+    // 6) Prove lineage
+    cat.lineage_proof.ok_or(WalletError::UnknownCoin)?;
+
+    if cat.info.asset_id != DIG_COIN_ASSET_ID {
+        return Err(WalletError::UnknownCoin);
+    }
+
+    Ok((cat, puzzle, node_ptr))
+}
+
 pub async fn subscribe_to_coin_states(
     peer: &Peer,
     coin_id: Bytes32,
@@ -1308,8 +1406,13 @@ pub async fn mint_nft(
     let mut meta_data_allocator = Allocator::new();
     let node_metadata = metadata.to_clvm(&mut meta_data_allocator)?;
     let metadata_hashed_ptr = HashedPtr::from_ptr(&meta_data_allocator, node_metadata);
-    let did_info: DidInfo =
-        DidInfo::new(did_coin.coin_id(), None, 1, metadata_hashed_ptr, public_key_hash.into());
+    let did_info: DidInfo = DidInfo::new(
+        did_coin.coin_id(),
+        None,
+        1,
+        metadata_hashed_ptr,
+        public_key_hash.into(),
+    );
 
     let did = Did::new(did_coin, did_proof, did_info);
 

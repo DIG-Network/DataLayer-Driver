@@ -35,13 +35,11 @@ pub mod wallet;
 pub use rust::{BlsPair, SimulatorPuzzle, UnspentCoinsResponse};
 pub use server_coin::{morph_launcher_id, ServerCoin};
 pub use wallet::{
-    create_simple_did, generate_did_proof,
-    generate_did_proof_from_chain, generate_did_proof_manual, get_fee_estimate,
-    get_header_hash, get_store_creation_height, get_unspent_coin_states, is_coin_spent,
-    look_up_possible_launchers, mint_nft,
-    spend_server_coins, subscribe_to_coin_states,
-    sync_store, sync_store_using_launcher_id, unsubscribe_from_coin_states,
-     verify_signature, DataStoreInnerSpend, NewServerCoin,
+    create_simple_did, generate_did_proof, generate_did_proof_from_chain,
+    generate_did_proof_manual, get_fee_estimate, get_header_hash, get_store_creation_height,
+    get_unspent_coin_states, is_coin_spent, look_up_possible_launchers, mint_nft,
+    spend_server_coins, subscribe_to_coin_states, sync_store, sync_store_using_launcher_id,
+    unsubscribe_from_coin_states, verify_signature, DataStoreInnerSpend, NewServerCoin,
     PossibleLaunchersResponse, SuccessResponse, SyncStoreResponse, TargetNetwork,
     UnspentCoinStates,
 };
@@ -146,7 +144,7 @@ pub fn send_xch(
     fee: u64,
 ) -> Result<Vec<CoinSpend>> {
     let outputs: Vec<(Bytes32, u64, Vec<Bytes>)> = outputs
-                .iter()
+        .iter()
         .map(|output| (output.puzzle_hash, output.amount, output.memos.clone()))
         .collect();
 
@@ -182,14 +180,14 @@ pub fn add_fee(
 pub fn sign_coin_spends(
     coin_spends: &[CoinSpend],
     private_keys: &[SecretKey],
-        for_testnet: bool,
+    for_testnet: bool,
 ) -> Result<Signature> {
     Ok(wallet::sign_coin_spends(
         coin_spends.to_vec(),
         private_keys.to_vec(),
-            if for_testnet {
+        if for_testnet {
             wallet::TargetNetwork::Testnet11
-            } else {
+        } else {
             wallet::TargetNetwork::Mainnet
         },
     )?)
@@ -306,7 +304,7 @@ pub fn melt_store(store: DataStore, owner_pk: PublicKey) -> Result<Vec<CoinSpend
 /// Creates a server coin (Rust API version).
 pub fn create_server_coin(
     synthetic_key: PublicKey,
-        selected_coins: Vec<Coin>,
+    selected_coins: Vec<Coin>,
     hint: Bytes32,
     uris: Vec<String>,
     amount: u64,
@@ -467,7 +465,7 @@ pub mod async_api {
     pub async fn mint_nft(
         peer: &Peer,
         synthetic_key: PublicKey,
-    selected_coins: Vec<Coin>,
+        selected_coins: Vec<Coin>,
         did_string: &str,
         recipient_puzzle_hash: Bytes32,
         metadata: chia::puzzles::nft::NftMetadata,
@@ -515,7 +513,7 @@ pub mod async_api {
     /// Creates a simple DID (Rust API version).
     pub fn create_simple_did(
         synthetic_key: PublicKey,
-    selected_coins: Vec<Coin>,
+        selected_coins: Vec<Coin>,
         fee: u64,
     ) -> Result<(Vec<CoinSpend>, Coin)> {
         Ok(wallet::create_simple_did(

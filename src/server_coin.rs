@@ -1,7 +1,10 @@
-use std::borrow::Cow;
-use chia_wallet_sdk::prelude::{Allocator, Bytes, Bytes32, Coin, Condition, CreateCoin, CurriedProgram, Mod, ToTreeHash, TreeHash, Memos, ToClvm, FromClvm};
+use chia_wallet_sdk::prelude::{
+    Allocator, Bytes, Bytes32, Coin, Condition, CreateCoin, CurriedProgram, FromClvm, Memos, Mod,
+    ToClvm, ToTreeHash, TreeHash,
+};
 use hex_literal::hex;
 use num_bigint::BigInt;
+use std::borrow::Cow;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ServerCoin {

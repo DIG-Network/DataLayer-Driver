@@ -644,7 +644,7 @@ impl Peer {
                 let peer = sim.lock().await;
                 let inner = peer.lock().await;
                 Ok(inner.height())
-            },
+            }
             None => Err(crate::js::err(
                 "Simulator is not available for this peer type",
             )),
