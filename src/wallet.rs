@@ -7,7 +7,6 @@ use chia::clvm_traits::{clvm_tuple, FromClvm, ToClvm};
 use chia::clvm_utils::{tree_hash, ToTreeHash};
 use chia::consensus::consensus_constants::ConsensusConstants;
 use chia::consensus::flags::{DONT_VALIDATE_SIGNATURE, MEMPOOL_MODE};
-use chia::consensus::opcodes::CREATE_COIN;
 use chia::consensus::owned_conditions::OwnedSpendBundleConditions;
 use chia::consensus::run_block_generator::run_block_generator;
 use chia::consensus::solution_generator::solution_generator;
@@ -25,12 +24,7 @@ use chia::puzzles::{
 use chia::ssl::Error::DateRange;
 use chia_puzzles::SINGLETON_LAUNCHER_HASH;
 use chia_wallet_sdk::client::{ClientError, Peer};
-use chia_wallet_sdk::driver::{
-    get_merkle_tree, Cat, CatSpend, DataStore, DataStoreMetadata, DelegatedPuzzle, Did, DidInfo,
-    DriverError, HashedPtr, IntermediateLauncher, Launcher, Layer, NftMint, OracleLayer,
-    P2ParentCoin, P2ParentLayer, Puzzle, SpendContext, SpendWithConditions, StandardLayer,
-    WriterLayer,
-};
+use chia_wallet_sdk::driver::{get_merkle_tree, Asset, Cat, CatSpend, DataStore, DataStoreMetadata, DelegatedPuzzle, Did, DidInfo, DriverError, HashedPtr, IntermediateLauncher, Launcher, Layer, NftMint, OracleLayer, P2ParentCoin, P2ParentLayer, Puzzle, SpendContext, SpendWithConditions, StandardLayer, WriterLayer};
 // Import proof types from our own crate's rust module
 use crate::rust::{EveProof, LineageProof, Proof};
 use chia_wallet_sdk::signer::{AggSigConstants, RequiredSignature, SignerError};
@@ -39,7 +33,6 @@ use chia_wallet_sdk::types::{
     conditions::{CreateCoin, MeltSingleton, Memos, UpdateDataStoreMerkleRoot},
     Condition, Conditions, MAINNET_CONSTANTS, TESTNET11_CONSTANTS,
 };
-use chia_wallet_sdk::types::Condition::CreateCoin;
 use chia_wallet_sdk::utils::{self, CoinSelectionError};
 use clvm_traits::clvm_quote;
 use clvmr::{Allocator, NodePtr};
@@ -262,28 +255,28 @@ pub fn create_dig_collateral_coin(
     }
 
     let tail_hash_hash = P2ParentCoin::inner_puzzle_hash(Some(DIG_COIN_ASSET_ID));
-    let p2_parent_dig_puzzle_hash = P2ParentCoin::puzzle_hash(Some(DIG_COIN_ASSET_ID));
 
     let p2 = StandardLayer::new(synthetic_key);
     let mut ctx = SpendContext::new();
     let hint = ctx.hint(store.coin.coin_id())?;
 
-    let p2_parent_creation_conditions = Conditions::new()
+    let conditions = Conditions::new()
         .create_coin(tail_hash_hash.into(), collateral_amount, hint);
 
-    let p2_parent_creation_spend = p2.spend_with_conditions(&mut ctx, p2_parent_creation_conditions)?;
-    let p2_parent_dig_spend = CatSpend::new(collateral_dig_coins[0].clone(), p2_parent_creation_spend);
+    let p2_parent_creation_spend = p2.spend_with_conditions(&mut ctx, conditions)?;
+    let mut p2_parent_dig_spend = vec![CatSpend::new(collateral_dig_coins[0].clone(), p2_parent_creation_spend)];
 
-    let mut all_dig_collateral_spends: Vec<CatSpend> = collateral_dig_coins[1..]
+    let p2_spend = p2.spend_with_conditions(&mut ctx, Conditions::new())?;
+    let dig_cat_spends: Vec<CatSpend> = collateral_dig_coins[1..]
         .into_iter()
         .map(|cat_coin| {
-
-            let spend = p2.spend_with_conditions(&mut ctx,)
+            CatSpend::new(cat_coin.clone(), p2_spend)
         })
         .collect();
 
+    p2_parent_dig_spend.extend(dig_cat_spends);
 
-    Cat::spend_all(&mut ctx, &cat_spends)?;
+    Cat::spend_all(&mut ctx, &p2_parent_dig_spend)?;
 
     Ok(ctx.take())
 }
