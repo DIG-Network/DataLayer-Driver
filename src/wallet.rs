@@ -39,6 +39,7 @@ use chia_wallet_sdk::types::{
     conditions::{CreateCoin, MeltSingleton, Memos, UpdateDataStoreMerkleRoot},
     Condition, Conditions, MAINNET_CONSTANTS, TESTNET11_CONSTANTS,
 };
+use chia_wallet_sdk::types::Condition::CreateCoin;
 use chia_wallet_sdk::utils::{self, CoinSelectionError};
 use clvm_traits::clvm_quote;
 use clvmr::{Allocator, NodePtr};
@@ -246,7 +247,7 @@ pub fn send_xch(
     Ok(ctx.take())
 }
 
-pub fn create_dig_collateral_coin_spend(
+pub fn create_dig_collateral_coin(
     collateral_dig_coins: Vec<Cat>,
     store: DataStore,
     synthetic_key: PublicKey,
@@ -259,25 +260,28 @@ pub fn create_dig_collateral_coin_spend(
         }
         collateral_amount += cat.coin.amount;
     }
-    let p2_tail_hash_hash = P2ParentCoin::inner_puzzle_hash(Some(DIG_COIN_ASSET_ID));
+
+    let tail_hash_hash = P2ParentCoin::inner_puzzle_hash(Some(DIG_COIN_ASSET_ID));
+    let p2_parent_dig_puzzle_hash = P2ParentCoin::puzzle_hash(Some(DIG_COIN_ASSET_ID));
 
     let p2 = StandardLayer::new(synthetic_key);
-    let p2_hash = p2.tree_hash();
-
     let mut ctx = SpendContext::new();
-    let memos_node_ptr =
-        ctx.alloc::<(Bytes32, Bytes32)>(&clvm_tuple!(p2_hash.into(), store.coin.coin_id()))?;
-    let memos = Memos::Some(memos_node_ptr);
+    let hint = ctx.hint(store.coin.coin_id())?;
 
-    let conditions = Conditions::new()
-        .create_coin(p2_tail_hash_hash.into(), collateral_amount, memos)
-        .reserve_fee(fee);
-    let cat_inner_spend =
-        StandardLayer::new(synthetic_key).spend_with_conditions(&mut ctx, conditions)?;
-    let cat_spends: Vec<CatSpend> = collateral_dig_coins
+    let p2_parent_creation_conditions = Conditions::new()
+        .create_coin(tail_hash_hash.into(), collateral_amount, hint);
+
+    let p2_parent_creation_spend = p2.spend_with_conditions(&mut ctx, p2_parent_creation_conditions)?;
+    let p2_parent_dig_spend = CatSpend::new(collateral_dig_coins[0].clone(), p2_parent_creation_spend);
+
+    let mut all_dig_collateral_spends: Vec<CatSpend> = collateral_dig_coins[1..]
         .into_iter()
-        .map(|cat_coin| CatSpend::new(cat_coin, cat_inner_spend))
+        .map(|cat_coin| {
+
+            let spend = p2.spend_with_conditions(&mut ctx,)
+        })
         .collect();
+
 
     Cat::spend_all(&mut ctx, &cat_spends)?;
 
