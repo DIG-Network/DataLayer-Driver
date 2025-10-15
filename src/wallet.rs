@@ -1,7 +1,7 @@
 #![allow(clippy::result_large_err)]
+use indexmap::indexmap;
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
-use indexmap::indexmap;
 
 use chia::bls::{sign, verify, PublicKey, SecretKey, Signature};
 use chia::clvm_traits::{clvm_tuple, FromClvm, ToClvm};
@@ -22,12 +22,19 @@ use chia::puzzles::{
     standard::{StandardArgs, StandardSolution},
     DeriveSynthetic,
 };
-use chia::ssl::Error::DateRange;
+
 use chia_puzzles::SINGLETON_LAUNCHER_HASH;
 use chia_wallet_sdk::client::{ClientError, Peer};
-use chia_wallet_sdk::driver::{get_merkle_tree, Action, Asset, Cat, CatSpend, DataStore, DataStoreMetadata, DelegatedPuzzle, Did, DidInfo, DriverError, HashedPtr, Id, IntermediateLauncher, Launcher, Layer, NftMint, OracleLayer, P2ParentCoin, P2ParentLayer, Puzzle, Relation, SpendContext, SpendWithConditions, Spends, StandardLayer, WriterLayer};
+use chia_wallet_sdk::driver::{
+    get_merkle_tree, Action, Cat, DataStore, DataStoreMetadata, DelegatedPuzzle,
+    Did, DidInfo, DriverError, HashedPtr, Id, IntermediateLauncher, Launcher, Layer, NftMint,
+    OracleLayer, P2ParentCoin, P2ParentLayer, Puzzle, Relation, SpendContext, SpendWithConditions,
+    Spends, StandardLayer, WriterLayer,
+};
 // Import proof types from our own crate's rust module
+use crate::rust::ServerCoin;
 use crate::rust::{EveProof, LineageProof, Proof};
+use crate::server_coin::{urls_from_conditions, MirrorArgs, MirrorSolution};
 use chia_wallet_sdk::signer::{AggSigConstants, RequiredSignature, SignerError};
 use chia_wallet_sdk::types::{
     announcement_id,
@@ -35,12 +42,9 @@ use chia_wallet_sdk::types::{
     Condition, Conditions, MAINNET_CONSTANTS, TESTNET11_CONSTANTS,
 };
 use chia_wallet_sdk::utils::{self, CoinSelectionError};
-use clvm_traits::clvm_quote;
 use clvmr::{Allocator, NodePtr};
 use hex_literal::hex;
 use thiserror::Error;
-use crate::rust::ServerCoin;
-use crate::server_coin::{urls_from_conditions, MirrorArgs, MirrorSolution};
 
 /* echo -n 'datastore' | sha256sum */
 pub const DATASTORE_LAUNCHER_HINT: Bytes32 = Bytes32::new(hex!(
@@ -256,7 +260,7 @@ pub fn create_dig_collateral_coin(
     }
 
     let p2_parent_hash = P2ParentCoin::inner_puzzle_hash(Some(DIG_COIN_ASSET_ID));
-    let p2_parent_puzzle_hash  = P2ParentCoin::puzzle_hash(Some(DIG_COIN_ASSET_ID));
+    let p2_parent_puzzle_hash = P2ParentCoin::puzzle_hash(Some(DIG_COIN_ASSET_ID));
 
     let mut ctx = SpendContext::new();
 
@@ -268,7 +272,12 @@ pub fn create_dig_collateral_coin(
 
     let actions = &[
         Action::fee(fee),
-        Action::send(Id::Existing(DIG_COIN_ASSET_ID), p2_parent_puzzle_hash.into(), collateral_amount, hint),
+        Action::send(
+            Id::Existing(DIG_COIN_ASSET_ID),
+            p2_parent_puzzle_hash.into(),
+            collateral_amount,
+            hint,
+        ),
     ];
 
     let p2_layer = StandardLayer::new(synthetic_key);
@@ -286,9 +295,10 @@ pub fn create_dig_collateral_coin(
     }
 
     let deltas = spends.apply(&mut ctx, actions)?;
-    let index_map = indexmap!{p2_puzzle_hash => synthetic_key};
+    let index_map = indexmap! {p2_puzzle_hash => synthetic_key};
 
-    let _outputs = spends.finish_with_keys(&mut ctx, &deltas, Relation::AssertConcurrent, &index_map)?;
+    let _outputs =
+        spends.finish_with_keys(&mut ctx, &deltas, Relation::AssertConcurrent, &index_map)?;
 
     Ok(ctx.take())
 }
@@ -1306,7 +1316,7 @@ pub async fn prove_dig_cat_coin(
 
     // 3) Convert puzzle to CLVM
     let parent_puzzle_ptr = parent_puzzle_and_solution.puzzle.to_clvm(allocator)?;
-    let parent_puzzle = Puzzle::parse(&allocator, parent_puzzle_ptr);
+    let parent_puzzle = Puzzle::parse(allocator, parent_puzzle_ptr);
 
     // 4) Convert solution to CLVM
     let parent_solution = parent_puzzle_and_solution.solution.to_clvm(allocator)?;
