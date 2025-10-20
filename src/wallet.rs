@@ -245,7 +245,7 @@ pub fn send_xch(
 }
 
 pub fn create_dig_collateral_coin(
-    dig_coins: Vec<Coin>,
+    dig_cats: Vec<Cat>,
     collateral_amount: u64,
     store_id: Bytes32,
     synthetic_key: PublicKey,
@@ -274,8 +274,8 @@ pub fn create_dig_collateral_coin(
     let mut spends = Spends::new(p2_puzzle_hash);
 
     // add collateral coins to spends
-    for dig_coin in dig_coins {
-        spends.add(dig_coin);
+    for cat in dig_cats {
+        spends.add(cat);
     }
 
     // add fee coins to spends
