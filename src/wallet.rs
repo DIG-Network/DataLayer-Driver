@@ -26,8 +26,8 @@ use chia::puzzles::{
 use chia_puzzles::SINGLETON_LAUNCHER_HASH;
 use chia_wallet_sdk::client::{ClientError, Peer};
 use chia_wallet_sdk::driver::{
-    get_merkle_tree, Action, Cat, DataStore, DataStoreMetadata, DelegatedPuzzle,
-    Did, DidInfo, DriverError, HashedPtr, Id, IntermediateLauncher, Launcher, Layer, NftMint,
+    get_merkle_tree, Action, Asset, Cat, DataStore, DataStoreMetadata, DelegatedPuzzle, Did,
+    DidInfo, DriverError, HashedPtr, Id, IntermediateLauncher, Launcher, Layer, NftMint,
     OracleLayer, P2ParentCoin, P2ParentLayer, Puzzle, Relation, SpendContext, SpendWithConditions,
     Spends, StandardLayer, WriterLayer,
 };
@@ -45,7 +45,7 @@ use chia_wallet_sdk::utils::{self, CoinSelectionError};
 use clvmr::{Allocator, NodePtr};
 use hex_literal::hex;
 use thiserror::Error;
-
+use crate::morph_store_launcher_id;
 /* echo -n 'datastore' | sha256sum */
 pub const DATASTORE_LAUNCHER_HINT: Bytes32 = Bytes32::new(hex!(
     "
@@ -53,7 +53,7 @@ pub const DATASTORE_LAUNCHER_HINT: Bytes32 = Bytes32::new(hex!(
     "
 ));
 
-pub const DIG_COIN_ASSET_ID: Bytes32 = Bytes32::new(hex!(
+pub const DIG_ASSET_ID: Bytes32 = Bytes32::new(hex!(
     "a406d3a9de984d03c9591c10d917593b434d5263cabe2b42f6b367df16832f81"
 ));
 
@@ -245,36 +245,25 @@ pub fn send_xch(
 }
 
 pub fn create_dig_collateral_coin(
-    collateral_dig_coins: Vec<Cat>,
-    morphed_store_id: Bytes32,
+    dig_coins: Vec<Coin>,
+    collateral_amount: u64,
+    store_id: Bytes32,
     synthetic_key: PublicKey,
     fee_coins: Vec<Coin>,
     fee: u64,
 ) -> Result<Vec<CoinSpend>, WalletError> {
-    let mut collateral_amount = 0_u64;
-    for cat in &collateral_dig_coins {
-        if cat.info.asset_id != DIG_COIN_ASSET_ID {
-            return Err(WalletError::Driver(DriverError::InvalidAssetId));
-        }
-        collateral_amount += cat.coin.amount;
-    }
-
-    let p2_parent_hash = P2ParentCoin::inner_puzzle_hash(Some(DIG_COIN_ASSET_ID));
-    let p2_parent_puzzle_hash = P2ParentCoin::puzzle_hash(Some(DIG_COIN_ASSET_ID));
+    let p2_parent_inner_hash = P2ParentCoin::inner_puzzle_hash(Some(DIG_ASSET_ID));
 
     let mut ctx = SpendContext::new();
 
-    let p2_parent_layer = P2ParentLayer::cat(p2_parent_hash);
-    p2_parent_layer.construct_puzzle(&mut ctx)?;
-
-    //todo add store id morph
+    let morphed_store_id = morph_store_launcher_id(store_id);
     let hint = ctx.hint(morphed_store_id)?;
 
     let actions = &[
         Action::fee(fee),
         Action::send(
-            Id::Existing(DIG_COIN_ASSET_ID),
-            p2_parent_puzzle_hash.into(),
+            Id::Existing(DIG_ASSET_ID),
+            p2_parent_inner_hash.into(),
             collateral_amount,
             hint,
         ),
@@ -285,8 +274,8 @@ pub fn create_dig_collateral_coin(
     let mut spends = Spends::new(p2_puzzle_hash);
 
     // add collateral coins to spends
-    for dig_cat in collateral_dig_coins {
-        spends.add(dig_cat);
+    for dig_coin in dig_coins {
+        spends.add(dig_coin);
     }
 
     // add fee coins to spends
@@ -1290,10 +1279,11 @@ pub async fn look_up_possible_launchers(
 
 pub async fn prove_dig_cat_coin(
     peer: &Peer,
-    allocator: &mut Allocator,
     coin: &Coin,
     coin_created_height: u32,
-) -> Result<(Cat, Puzzle, NodePtr), WalletError> {
+) -> Result<Cat, WalletError> {
+    let mut ctx = SpendContext::new();
+
     // 1) Request parent coin state
     let parent_state_response = peer
         .request_coin_state(
@@ -1315,29 +1305,30 @@ pub async fn prove_dig_cat_coin(
         parent_puzzle_and_solution_response.map_err(|_| WalletError::RejectPuzzleSolution)?;
 
     // 3) Convert puzzle to CLVM
-    let parent_puzzle_ptr = parent_puzzle_and_solution.puzzle.to_clvm(allocator)?;
-    let parent_puzzle = Puzzle::parse(allocator, parent_puzzle_ptr);
+    let parent_puzzle_ptr = ctx.alloc(&parent_puzzle_and_solution.puzzle)?;
+    let parent_puzzle = Puzzle::parse(&mut ctx, parent_puzzle_ptr);
 
     // 4) Convert solution to CLVM
-    let parent_solution = parent_puzzle_and_solution.solution.to_clvm(allocator)?;
+    let parent_solution = ctx.alloc(&parent_puzzle_and_solution.solution)?;
 
     // 5) Parse CAT
-    let (cat, puzzle, node_ptr) = Cat::parse(
-        allocator,
+    let parsed_children = Cat::parse_children(
+        &mut ctx,
         parent_state.coin_states[0].coin,
         parent_puzzle,
         parent_solution,
     )?
     .ok_or(WalletError::UnknownCoin)?;
 
-    // 6) Prove lineage
-    cat.lineage_proof.ok_or(WalletError::UnknownCoin)?;
-
-    if cat.info.asset_id != DIG_COIN_ASSET_ID {
-        return Err(WalletError::UnknownCoin);
-    }
-
-    Ok((cat, puzzle, node_ptr))
+    let proved_cat = parsed_children
+        .into_iter()
+        .find(|parsed_child| {
+            parsed_child.coin_id() == coin.coin_id()
+                && parsed_child.lineage_proof.is_some()
+                && parsed_child.info.asset_id == DIG_ASSET_ID
+        })
+        .ok_or_else(|| WalletError::UnknownCoin)?;
+    Ok(proved_cat)
 }
 
 pub async fn subscribe_to_coin_states(

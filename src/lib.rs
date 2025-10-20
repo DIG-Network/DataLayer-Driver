@@ -16,6 +16,7 @@
 
 // Re-export core types from dependencies
 pub use chia::bls::{master_to_wallet_unhardened, PublicKey, SecretKey, Signature};
+use chia::consensus::solution_generator::solution_generator;
 pub use chia::protocol::{Bytes, Bytes32, Coin, CoinSpend, CoinState, Program, SpendBundle};
 pub use chia::puzzles::{EveProof, LineageProof, Proof};
 pub use chia_wallet_sdk::client::Peer;
@@ -44,11 +45,24 @@ pub use wallet::{
     UnspentCoinStates,
 };
 
+use hex_literal::hex;
+
 // Type aliases for convenience
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
 // Helper functions for common conversions
 use chia::puzzles::{standard::StandardArgs, DeriveSynthetic};
+use chia_wallet_sdk::prelude::ToTreeHash;
+
+pub const DIG_MIN_HEIGHT: u32 = 5777842;
+pub const DIG_MIN_HEIGHT_HEADER_HASH: Bytes32 = Bytes32::new(hex!("b29a4daac2434fd17a36e15ba1aac5d65012d4a66f99bed0bf2b5342e92e562c"));
+
+pub const DIG_STORE_LAUNCHER_ID_MORPH: &str = "DIG_STORE";
+
+/// Morphs a DIG store launcher ID into the DIG namespace. Store launcher IDs should be morphed when hinted on coins
+pub fn morph_store_launcher_id(store_launcher_id: Bytes32) -> Bytes32 {
+    (store_launcher_id, DIG_STORE_LAUNCHER_ID_MORPH).tree_hash().into()
+}
 
 /// Converts a master public key to a wallet synthetic key.
 pub fn master_public_key_to_wallet_synthetic_key(public_key: &PublicKey) -> PublicKey {
@@ -323,6 +337,9 @@ pub fn create_server_coin(
 /// Async functions for blockchain interaction (Rust API versions)
 pub mod async_api {
     use super::*;
+    use chia_wallet_sdk::driver::Puzzle;
+    use chia_wallet_sdk::prelude::Cat;
+    use clvmr::{Allocator, NodePtr};
     use futures_util::stream::{FuturesUnordered, StreamExt};
     use rand::seq::SliceRandom;
     use std::net::SocketAddr;
@@ -595,6 +612,14 @@ pub mod async_api {
         spend_bundle: SpendBundle,
     ) -> Result<chia::protocol::TransactionAck> {
         Ok(wallet::broadcast_spend_bundle(peer, spend_bundle).await?)
+    }
+
+    pub async fn prove_dig_cat_coin(
+        peer: &Peer,
+        coin: &Coin,
+        coin_created_height: u32,
+    ) -> Result<Cat> {
+        Ok(wallet::prove_dig_cat_coin(peer, coin, coin_created_height).await?)
     }
 }
 
