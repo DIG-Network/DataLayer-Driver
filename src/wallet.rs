@@ -1,6 +1,9 @@
 #![allow(clippy::result_large_err)]
+
 use indexmap::indexmap;
+use std::alloc::alloc;
 use std::collections::HashMap;
+use std::hash::Hash;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use chia::bls::{sign, verify, PublicKey, SecretKey, Signature};
@@ -11,7 +14,6 @@ use chia::consensus::flags::{DONT_VALIDATE_SIGNATURE, MEMPOOL_MODE};
 use chia::consensus::owned_conditions::OwnedSpendBundleConditions;
 use chia::consensus::run_block_generator::run_block_generator;
 use chia::consensus::solution_generator::solution_generator;
-use chia::consensus::validation_error::ValidationErr;
 use chia::protocol::{
     Bytes, Bytes32, Coin, CoinSpend, CoinState, CoinStateFilters, RejectHeaderRequest,
     RequestBlockHeader, RequestFeeEstimates, RespondBlockHeader, RespondFeeEstimates, SpendBundle,
@@ -24,17 +26,21 @@ use chia::puzzles::{
 };
 
 use chia_puzzles::SINGLETON_LAUNCHER_HASH;
-use chia_wallet_sdk::client::{ClientError, Peer};
+use chia_wallet_sdk::client::Peer;
+use chia_wallet_sdk::coinset::{ChiaRpcClient, CoinsetClient};
+use chia_wallet_sdk::driver::Puzzle::Curried;
 use chia_wallet_sdk::driver::{
-    get_merkle_tree, Action, Asset, Cat, DataStore, DataStoreMetadata, DelegatedPuzzle, Did,
-    DidInfo, DriverError, HashedPtr, Id, IntermediateLauncher, Launcher, Layer, NftMint,
-    OracleLayer, P2ParentCoin, P2ParentLayer, Puzzle, Relation, SpendContext, SpendWithConditions,
+    get_merkle_tree, Action, Asset, Cat, CurriedPuzzle, DataStore, DataStoreMetadata,
+    DelegatedPuzzle, Did, DidInfo, DriverError, HashedPtr, Id, IntermediateLauncher, Launcher,
+    Layer, NftMint, OracleLayer, P2ParentCoin, Puzzle, Relation, SpendContext, SpendWithConditions,
     Spends, StandardLayer, WriterLayer,
 };
 // Import proof types from our own crate's rust module
-use crate::rust::ServerCoin;
-use crate::rust::{EveProof, LineageProof, Proof};
-use crate::server_coin::{urls_from_conditions, MirrorArgs, MirrorSolution};
+use crate::error::WalletError;
+pub use crate::types::{coin_records_to_states, SuccessResponse, XchServerCoin};
+use crate::types::{EveProof, LineageProof, Proof};
+use crate::xch_server_coin::{urls_from_conditions, MirrorArgs, MirrorSolution, NewXchServerCoin};
+use crate::{morph_store_launcher_id, NetworkType, UnspentCoinStates, DIG_MIN_HEIGHT};
 use chia_wallet_sdk::signer::{AggSigConstants, RequiredSignature, SignerError};
 use chia_wallet_sdk::types::{
     announcement_id,
@@ -42,10 +48,9 @@ use chia_wallet_sdk::types::{
     Condition, Conditions, MAINNET_CONSTANTS, TESTNET11_CONSTANTS,
 };
 use chia_wallet_sdk::utils::{self, CoinSelectionError};
-use clvmr::{Allocator, NodePtr};
+use clvmr::Allocator;
+use futures_util::StreamExt;
 use hex_literal::hex;
-use thiserror::Error;
-use crate::morph_store_launcher_id;
 /* echo -n 'datastore' | sha256sum */
 pub const DATASTORE_LAUNCHER_HINT: Bytes32 = Bytes32::new(hex!(
     "
@@ -57,67 +62,107 @@ pub const DIG_ASSET_ID: Bytes32 = Bytes32::new(hex!(
     "a406d3a9de984d03c9591c10d917593b434d5263cabe2b42f6b367df16832f81"
 ));
 
-#[derive(Clone, Debug)]
-pub struct SuccessResponse {
-    pub coin_spends: Vec<CoinSpend>,
-    pub new_datastore: DataStore,
+pub const MAX_CLVM_COST: u64 = 11_000_000_000;
+
+pub async fn get_unspent_coins_by_hints(
+    network_type: NetworkType,
+    hints: Vec<Bytes32>,
+) -> Result<Vec<CoinState>, WalletError> {
+    let coinset_client = match network_type {
+        NetworkType::Mainnet => CoinsetClient::mainnet(),
+        NetworkType::Testnet11 => CoinsetClient::testnet11(),
+    };
+
+    let get_coin_records_response = coinset_client
+        .get_coin_records_by_hints(hints, Some(DIG_MIN_HEIGHT), None, Some(false))
+        .await
+        .map_err(|error| WalletError::CoinRetrievalFailure(error.to_string()))?;
+
+    if get_coin_records_response.success
+        && get_coin_records_response.error.is_none()
+        && get_coin_records_response.coin_records.is_some()
+    {
+        Ok(coin_records_to_states(
+            get_coin_records_response.coin_records.unwrap_or(vec![]),
+        ))
+    } else {
+        let error_string = if let Some(error) = get_coin_records_response.error {
+            error
+        } else {
+            "An unknown error occurred".to_string()
+        };
+        Err(WalletError::CoinRetrievalFailure(error_string))
+    }
 }
 
-/// The new server coin and coin spends to create it.
-#[derive(Clone, Debug)]
-pub struct NewServerCoin {
-    pub server_coin: ServerCoin,
-    pub coin_spends: Vec<CoinSpend>,
-}
+/// Instantiates a $DIG collateral coin
+pub async fn fetch_dig_collateral_coin(
+    peer: &Peer,
+    coin_state: CoinState,
+    min_collateral_amount: u64,
+) -> Result<(P2ParentCoin, Memos), WalletError> {
+    let coin = coin_state.coin;
 
-#[derive(Debug, Error)]
-pub enum WalletError {
-    #[error("{0:?}")]
-    Client(#[from] ClientError),
+    // verify coin is unspent
+    if coin_state.spent_height.is_some() {
+        return Err(WalletError::CoinIsAlreadySpent);
+    }
 
-    #[error("RejectPuzzleState")]
-    RejectPuzzleState,
+    // verify the coin has the correct amount
+    if coin.amount < min_collateral_amount {
+        return Err(WalletError::InsufficientCoinAmount);
+    }
 
-    #[error("RejectCoinState")]
-    RejectCoinState,
+    // verify that the coin is $DIG p2 parent
+    let p2_parent_inner_hash = P2ParentCoin::puzzle_hash(Some(DIG_ASSET_ID));
+    if coin.puzzle_hash != p2_parent_inner_hash.into() {
+        return Err(WalletError::PuzzleHashMismatch(format!(
+            "Coin {} is not locked by the $DIG collateral puzzle",
+            coin.coin_id()
+        )));
+    }
 
-    #[error("RejectPuzzleSolution")]
-    RejectPuzzleSolution,
+    let Some(created_height) = coin_state.created_height else {
+        return Err(WalletError::UnknownCoin);
+    };
 
-    #[error("RejectHeaderRequest")]
-    RejectHeaderRequest,
+    // 1) Request parent coin state
+    let parent_state = peer
+        .request_coin_state(
+            vec![coin.parent_coin_info],
+            Some(DIG_MIN_HEIGHT),
+            MAINNET_CONSTANTS.genesis_challenge,
+            false,
+        )
+        .await?
+        .map_err(|_| WalletError::RejectCoinState)?
+        .coin_states
+        .first()
+        .copied()
+        .ok_or(WalletError::UnknownCoin)?;
 
-    #[error("{0:?}")]
-    Driver(#[from] DriverError),
+    let parent_puzzle_and_solution_response = peer
+        .request_puzzle_and_solution(coin.parent_coin_info, created_height)
+        .await?
+        .map_err(|_| WalletError::RejectPuzzleSolution)?;
 
-    #[error("ParseError")]
-    Parse,
+    let mut allocator = Allocator::new();
+    let parent_puzzle_ptr = parent_puzzle_and_solution_response
+        .puzzle
+        .to_clvm(&mut allocator)?;
+    let parent_solution_ptr = parent_puzzle_and_solution_response
+        .solution
+        .to_clvm(&mut allocator)?;
+    let parent_puzzle = Puzzle::parse(&mut allocator, parent_puzzle_ptr);
 
-    #[error("UnknownCoin")]
-    UnknownCoin,
-
-    #[error("Clvm error")]
-    Clvm,
-    #[error("ToClvm error: {0}")]
-    ToClvm(#[from] chia::clvm_traits::ToClvmError),
-
-    #[error("Permission error: puzzle can't perform this action")]
-    Permission,
-
-    #[error("Io error: {0}")]
-    Io(std::io::Error),
-
-    #[error("Validation error: {0}")]
-    Validation(#[from] ValidationErr),
-
-    #[error("Fee estimation rejection: {0}")]
-    FeeEstimateRejection(String),
-}
-
-pub struct UnspentCoinStates {
-    pub coin_states: Vec<CoinState>,
-    pub last_height: u32,
-    pub last_header_hash: Bytes32,
+    Ok(P2ParentCoin::parse_child(
+        &mut allocator,
+        parent_state.coin,
+        parent_puzzle,
+        parent_solution_ptr,
+    )
+    .unwrap()
+    .ok_or(WalletError::Parse)?)
 }
 
 pub async fn get_unspent_coin_states(
@@ -259,7 +304,7 @@ pub fn create_dig_collateral_coin(
     let morphed_store_id = morph_store_launcher_id(store_id);
     let hint = ctx.hint(morphed_store_id)?;
 
-    let actions = &[
+    let actions = [
         Action::fee(fee),
         Action::send(
             Id::Existing(DIG_ASSET_ID),
@@ -283,7 +328,7 @@ pub fn create_dig_collateral_coin(
         spends.add(fee_xch_coin);
     }
 
-    let deltas = spends.apply(&mut ctx, actions)?;
+    let deltas = spends.apply(&mut ctx, &actions)?;
     let index_map = indexmap! {p2_puzzle_hash => synthetic_key};
 
     let _outputs =
@@ -299,7 +344,7 @@ pub fn create_server_coin(
     uris: Vec<String>,
     amount: u64,
     fee: u64,
-) -> Result<NewServerCoin, WalletError> {
+) -> Result<NewXchServerCoin, WalletError> {
     let puzzle_hash = StandardArgs::curry_tree_hash(synthetic_key).into();
 
     let mut memos = Vec::with_capacity(uris.len() + 1);
@@ -330,7 +375,7 @@ pub fn create_server_coin(
         puzzle_hash,
     )?;
 
-    let server_coin = ServerCoin {
+    let server_coin = XchServerCoin {
         coin: Coin::new(
             selected_coins[0].coin_id(),
             MirrorArgs::curry_tree_hash().into(),
@@ -340,13 +385,13 @@ pub fn create_server_coin(
         memo_urls: uris,
     };
 
-    Ok(NewServerCoin {
+    Ok(NewXchServerCoin {
         coin_spends: ctx.take(),
         server_coin,
     })
 }
 
-pub async fn spend_server_coins(
+pub async fn spend_xch_server_coins(
     peer: &Peer,
     synthetic_key: PublicKey,
     selected_coins: Vec<Coin>,
@@ -437,11 +482,11 @@ pub async fn spend_server_coins(
     Ok(ctx.take())
 }
 
-pub async fn fetch_server_coin(
+pub async fn fetch_xch_server_coin(
     peer: &Peer,
     coin_state: CoinState,
     max_cost: u64,
-) -> Result<ServerCoin, WalletError> {
+) -> Result<XchServerCoin, WalletError> {
     let Some(created_height) = coin_state.created_height else {
         return Err(WalletError::UnknownCoin);
     };
@@ -473,7 +518,7 @@ pub async fn fetch_server_coin(
         .to_clvm(&mut allocator)
         .map_err(DriverError::ToClvm)?;
 
-    Ok(ServerCoin {
+    Ok(XchServerCoin {
         coin: coin_state.coin,
         p2_puzzle_hash: tree_hash(&allocator, puzzle).into(),
         memo_urls: urls,
@@ -1288,7 +1333,7 @@ pub async fn prove_dig_cat_coin(
     let parent_state_response = peer
         .request_coin_state(
             vec![coin.parent_coin_info],
-            None,
+            Some(DIG_MIN_HEIGHT),
             MAINNET_CONSTANTS.genesis_challenge,
             false,
         )

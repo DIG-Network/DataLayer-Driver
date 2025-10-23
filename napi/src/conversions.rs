@@ -6,7 +6,7 @@ use napi::bindgen_prelude::*;
 use napi::Result;
 use thiserror::Error;
 
-use crate::{js, rust};
+use crate::{js, types};
 
 #[derive(Error, Debug)]
 pub enum ConversionError {
@@ -153,7 +153,7 @@ impl ToJs<BigInt> for u64 {
     }
 }
 
-impl FromJs<js::Coin> for rust::Coin {
+impl FromJs<js::Coin> for types::Coin {
     fn from_js(value: js::Coin) -> Result<Self> {
         Ok(Self {
             parent_coin_info: Bytes32::from_js(value.parent_coin_info)?,
@@ -163,7 +163,7 @@ impl FromJs<js::Coin> for rust::Coin {
     }
 }
 
-impl ToJs<js::Coin> for rust::Coin {
+impl ToJs<js::Coin> for types::Coin {
     fn to_js(&self) -> Result<js::Coin> {
         Ok(js::Coin {
             parent_coin_info: self.parent_coin_info.to_js()?,
@@ -173,7 +173,7 @@ impl ToJs<js::Coin> for rust::Coin {
     }
 }
 
-impl FromJs<js::SimulatorPuzzle> for rust::SimulatorPuzzle {
+impl FromJs<js::SimulatorPuzzle> for types::SimulatorPuzzle {
     fn from_js(value: js::SimulatorPuzzle) -> Result<Self> {
         Ok(Self {
             puzzle_hash: Bytes32::from_js(value.puzzle_hash)?,
@@ -182,7 +182,7 @@ impl FromJs<js::SimulatorPuzzle> for rust::SimulatorPuzzle {
     }
 }
 
-impl ToJs<js::SimulatorPuzzle> for rust::SimulatorPuzzle {
+impl ToJs<js::SimulatorPuzzle> for types::SimulatorPuzzle {
     fn to_js(&self) -> Result<js::SimulatorPuzzle> {
         Ok(js::SimulatorPuzzle {
             puzzle_reveal: self.puzzle_reveal.to_js()?,
@@ -191,7 +191,7 @@ impl ToJs<js::SimulatorPuzzle> for rust::SimulatorPuzzle {
     }
 }
 
-impl FromJs<js::BlsPair> for rust::BlsPair {
+impl FromJs<js::BlsPair> for types::BlsPair {
     fn from_js(value: js::BlsPair) -> Result<Self> {
         Ok(Self {
             puzzle_hash: Bytes32::from_js(value.puzzle_hash)?,
@@ -201,7 +201,7 @@ impl FromJs<js::BlsPair> for rust::BlsPair {
     }
 }
 
-impl ToJs<js::BlsPair> for rust::BlsPair {
+impl ToJs<js::BlsPair> for types::BlsPair {
     fn to_js(&self) -> Result<js::BlsPair> {
         Ok(js::BlsPair {
             puzzle_hash: self.puzzle_hash.to_js()?,
@@ -211,10 +211,10 @@ impl ToJs<js::BlsPair> for rust::BlsPair {
     }
 }
 
-impl FromJs<js::CoinState> for rust::CoinState {
+impl FromJs<js::CoinState> for types::CoinState {
     fn from_js(value: js::CoinState) -> Result<Self> {
         Ok(Self {
-            coin: rust::Coin::from_js(value.coin)?,
+            coin: types::Coin::from_js(value.coin)?,
             spent_height: value
                 .spent_height
                 .map(|height| {
@@ -235,7 +235,7 @@ impl FromJs<js::CoinState> for rust::CoinState {
     }
 }
 
-impl ToJs<js::CoinState> for rust::CoinState {
+impl ToJs<js::CoinState> for types::CoinState {
     fn to_js(&self) -> Result<js::CoinState> {
         Ok(js::CoinState {
             coin: self.coin.to_js()?,
@@ -251,17 +251,17 @@ impl ToJs<js::CoinState> for rust::CoinState {
     }
 }
 
-impl FromJs<js::CoinSpend> for rust::CoinSpend {
+impl FromJs<js::CoinSpend> for types::CoinSpend {
     fn from_js(value: js::CoinSpend) -> Result<Self> {
         Ok(Self {
-            coin: rust::Coin::from_js(value.coin)?,
+            coin: types::Coin::from_js(value.coin)?,
             puzzle_reveal: Program::from_js(value.puzzle_reveal)?,
             solution: Program::from_js(value.solution)?,
         })
     }
 }
 
-impl ToJs<js::CoinSpend> for rust::CoinSpend {
+impl ToJs<js::CoinSpend> for types::CoinSpend {
     fn to_js(&self) -> Result<js::CoinSpend> {
         Ok(js::CoinSpend {
             coin: self.coin.to_js()?,
@@ -271,7 +271,7 @@ impl ToJs<js::CoinSpend> for rust::CoinSpend {
     }
 }
 
-impl FromJs<js::LineageProof> for rust::LineageProof {
+impl FromJs<js::LineageProof> for types::LineageProof {
     fn from_js(value: js::LineageProof) -> Result<Self> {
         Ok(Self {
             parent_parent_coin_info: Bytes32::from_js(value.parent_parent_coin_info)?,
@@ -281,7 +281,7 @@ impl FromJs<js::LineageProof> for rust::LineageProof {
     }
 }
 
-impl ToJs<js::LineageProof> for rust::LineageProof {
+impl ToJs<js::LineageProof> for types::LineageProof {
     fn to_js(&self) -> Result<js::LineageProof> {
         Ok(js::LineageProof {
             parent_parent_coin_info: self.parent_parent_coin_info.to_js()?,
@@ -291,16 +291,16 @@ impl ToJs<js::LineageProof> for rust::LineageProof {
     }
 }
 
-impl FromJs<js::EveProof> for rust::EveProof {
+impl FromJs<js::EveProof> for types::EveProof {
     fn from_js(value: js::EveProof) -> Result<Self> {
-        Ok(rust::EveProof {
+        Ok(types::EveProof {
             parent_parent_coin_info: Bytes32::from_js(value.parent_parent_coin_info)?,
             parent_amount: u64::from_js(value.parent_amount)?,
         })
     }
 }
 
-impl ToJs<js::EveProof> for rust::EveProof {
+impl ToJs<js::EveProof> for types::EveProof {
     fn to_js(&self) -> Result<js::EveProof> {
         Ok(js::EveProof {
             parent_parent_coin_info: self.parent_parent_coin_info.to_js()?,
@@ -309,28 +309,28 @@ impl ToJs<js::EveProof> for rust::EveProof {
     }
 }
 
-impl FromJs<js::Proof> for rust::Proof {
+impl FromJs<js::Proof> for types::Proof {
     fn from_js(value: js::Proof) -> Result<Self> {
         if let Some(lineage_proof) = value.lineage_proof {
-            Ok(rust::Proof::Lineage(rust::LineageProof::from_js(
+            Ok(types::Proof::Lineage(types::LineageProof::from_js(
                 lineage_proof,
             )?))
         } else if let Some(eve_proof) = value.eve_proof {
-            Ok(rust::Proof::Eve(rust::EveProof::from_js(eve_proof)?))
+            Ok(types::Proof::Eve(types::EveProof::from_js(eve_proof)?))
         } else {
             Err(js::err(ConversionError::MissingProof))
         }
     }
 }
 
-impl ToJs<js::Proof> for rust::Proof {
+impl ToJs<js::Proof> for types::Proof {
     fn to_js(&self) -> Result<js::Proof> {
         Ok(match self {
-            rust::Proof::Lineage(lineage_proof) => js::Proof {
+            types::Proof::Lineage(lineage_proof) => js::Proof {
                 lineage_proof: Some(lineage_proof.to_js()?),
                 eve_proof: None,
             },
-            rust::Proof::Eve(eve_proof) => js::Proof {
+            types::Proof::Eve(eve_proof) => js::Proof {
                 lineage_proof: None,
                 eve_proof: Some(eve_proof.to_js()?),
             },
@@ -338,17 +338,17 @@ impl ToJs<js::Proof> for rust::Proof {
     }
 }
 
-impl FromJs<js::ServerCoin> for rust::ServerCoin {
+impl FromJs<js::ServerCoin> for types::XchServerCoin {
     fn from_js(value: js::ServerCoin) -> Result<Self> {
         Ok(Self {
-            coin: rust::Coin::from_js(value.coin)?,
+            coin: types::Coin::from_js(value.coin)?,
             p2_puzzle_hash: Bytes32::from_js(value.p2_puzzle_hash)?,
             memo_urls: value.memo_urls,
         })
     }
 }
 
-impl ToJs<js::ServerCoin> for rust::ServerCoin {
+impl ToJs<js::ServerCoin> for types::XchServerCoin {
     fn to_js(&self) -> Result<js::ServerCoin> {
         Ok(js::ServerCoin {
             coin: self.coin.to_js()?,
@@ -358,26 +358,26 @@ impl ToJs<js::ServerCoin> for rust::ServerCoin {
     }
 }
 
-impl FromJs<js::SpendBundle> for rust::SpendBundle {
+impl FromJs<js::SpendBundle> for types::SpendBundle {
     fn from_js(value: js::SpendBundle) -> Result<Self> {
         Ok(Self {
             coin_spends: value
                 .coin_spends
                 .into_iter()
-                .map(rust::CoinSpend::from_js)
+                .map(types::CoinSpend::from_js)
                 .collect::<Result<Vec<_>>>()?,
             aggregated_signature: Signature::from_js(value.aggregated_signature)?,
         })
     }
 }
 
-impl ToJs<js::SpendBundle> for rust::SpendBundle {
+impl ToJs<js::SpendBundle> for types::SpendBundle {
     fn to_js(&self) -> Result<js::SpendBundle> {
         Ok(js::SpendBundle {
             coin_spends: self
                 .coin_spends
                 .iter()
-                .map(rust::CoinSpend::to_js)
+                .map(types::CoinSpend::to_js)
                 .collect::<Result<Vec<_>>>()?,
             aggregated_signature: self.aggregated_signature.to_js()?,
         })

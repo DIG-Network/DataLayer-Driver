@@ -1,3 +1,4 @@
+use crate::CoinSpend;
 use chia_wallet_sdk::prelude::{
     Allocator, Bytes, Bytes32, Coin, Condition, CreateCoin, CurriedProgram, FromClvm, Memos, Mod,
     ToClvm, ToTreeHash, TreeHash,
@@ -6,8 +7,15 @@ use hex_literal::hex;
 use num_bigint::BigInt;
 use std::borrow::Cow;
 
+/// The new server coin and coin spends to create it.
+#[derive(Clone, Debug)]
+pub struct NewXchServerCoin {
+    pub server_coin: XchServerCoin,
+    pub coin_spends: Vec<CoinSpend>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ServerCoin {
+pub struct XchServerCoin {
     pub coin: Coin,
     pub p2_puzzle_hash: Bytes32,
     pub memo_urls: Vec<String>,
