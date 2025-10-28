@@ -19,7 +19,9 @@ pub use chia::bls::{master_to_wallet_unhardened, PublicKey, SecretKey, Signature
 pub use chia::protocol::{Bytes, Bytes32, Coin, CoinSpend, CoinState, Program, SpendBundle};
 pub use chia::puzzles::{EveProof, LineageProof, Proof};
 pub use chia_wallet_sdk::client::Peer;
-pub use chia_wallet_sdk::driver::{DataStore, DataStoreInfo, DataStoreMetadata, DelegatedPuzzle};
+pub use chia_wallet_sdk::driver::{
+    DataStore, DataStoreInfo, DataStoreMetadata, DelegatedPuzzle, P2ParentCoin,
+};
 pub use chia_wallet_sdk::utils::Address;
 
 // Re-export async_api and constants modules at the top level for convenience
@@ -33,7 +35,9 @@ pub mod wallet;
 pub mod xch_server_coin;
 
 // Re-export types from internal modules
-pub use types::{BlsPair, SimulatorPuzzle, UnspentCoinStates, UnspentCoinsResponse};
+pub use types::{
+    BlsPair, SimulatorPuzzle, SuccessResponse, UnspentCoinStates, UnspentCoinsResponse,
+};
 pub use wallet::{
     create_simple_did, generate_did_proof, generate_did_proof_from_chain,
     generate_did_proof_manual, get_fee_estimate, get_header_hash, get_store_creation_height,
@@ -50,7 +54,6 @@ use hex_literal::hex;
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
 // Helper functions for common conversions
-use crate::types::SuccessResponse;
 use chia::puzzles::{standard::StandardArgs, DeriveSynthetic};
 use chia_wallet_sdk::prelude::ToTreeHash;
 // Helper functions for common conversions
@@ -579,7 +582,7 @@ pub mod async_api {
         network: NetworkType,
         hints: Vec<Bytes32>,
     ) -> Result<Vec<CoinState>> {
-        Ok(wallet::get_unspent_coins_by_hints(network, hints).await?)
+        Ok(wallet::get_unspent_coin_states_by_hints(hints, network).await?)
     }
 
     /// Gets all unspent coins for a puzzle hash (Rust API version).

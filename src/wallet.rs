@@ -1,9 +1,7 @@
 #![allow(clippy::result_large_err)]
 
 use indexmap::indexmap;
-use std::alloc::alloc;
 use std::collections::HashMap;
-use std::hash::Hash;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use chia::bls::{sign, verify, PublicKey, SecretKey, Signature};
@@ -24,16 +22,14 @@ use chia::puzzles::{
     standard::{StandardArgs, StandardSolution},
     DeriveSynthetic,
 };
-
 use chia_puzzles::SINGLETON_LAUNCHER_HASH;
 use chia_wallet_sdk::client::Peer;
 use chia_wallet_sdk::coinset::{ChiaRpcClient, CoinsetClient};
-use chia_wallet_sdk::driver::Puzzle::Curried;
 use chia_wallet_sdk::driver::{
-    get_merkle_tree, Action, Asset, Cat, CurriedPuzzle, DataStore, DataStoreMetadata,
-    DelegatedPuzzle, Did, DidInfo, DriverError, HashedPtr, Id, IntermediateLauncher, Launcher,
-    Layer, NftMint, OracleLayer, P2ParentCoin, Puzzle, Relation, SpendContext, SpendWithConditions,
-    Spends, StandardLayer, WriterLayer,
+    get_merkle_tree, Action, Asset, Cat, DataStore, DataStoreMetadata, DelegatedPuzzle, Did,
+    DidInfo, DriverError, HashedPtr, Id, IntermediateLauncher, Launcher, Layer, NftMint,
+    OracleLayer, P2ParentCoin, Puzzle, Relation, SpendContext, SpendWithConditions, Spends,
+    StandardLayer, WriterLayer,
 };
 // Import proof types from our own crate's rust module
 use crate::error::WalletError;
@@ -49,8 +45,8 @@ use chia_wallet_sdk::types::{
 };
 use chia_wallet_sdk::utils::{self, CoinSelectionError};
 use clvmr::Allocator;
-use futures_util::StreamExt;
 use hex_literal::hex;
+
 /* echo -n 'datastore' | sha256sum */
 pub const DATASTORE_LAUNCHER_HINT: Bytes32 = Bytes32::new(hex!(
     "
@@ -64,9 +60,9 @@ pub const DIG_ASSET_ID: Bytes32 = Bytes32::new(hex!(
 
 pub const MAX_CLVM_COST: u64 = 11_000_000_000;
 
-pub async fn get_unspent_coins_by_hints(
-    network_type: NetworkType,
+pub async fn get_unspent_coin_states_by_hints(
     hints: Vec<Bytes32>,
+    network_type: NetworkType,
 ) -> Result<Vec<CoinState>, WalletError> {
     let coinset_client = match network_type {
         NetworkType::Mainnet => CoinsetClient::mainnet(),
@@ -96,10 +92,11 @@ pub async fn get_unspent_coins_by_hints(
 }
 
 /// Instantiates a $DIG collateral coin
+/// Verifies that coin is unspent and locked by the $DIG P2Parent puzzle
+/// Optionally validate coin ownership
 pub async fn fetch_dig_collateral_coin(
     peer: &Peer,
     coin_state: CoinState,
-    min_collateral_amount: u64,
 ) -> Result<(P2ParentCoin, Memos), WalletError> {
     let coin = coin_state.coin;
 
@@ -108,14 +105,9 @@ pub async fn fetch_dig_collateral_coin(
         return Err(WalletError::CoinIsAlreadySpent);
     }
 
-    // verify the coin has the correct amount
-    if coin.amount < min_collateral_amount {
-        return Err(WalletError::InsufficientCoinAmount);
-    }
-
     // verify that the coin is $DIG p2 parent
-    let p2_parent_inner_hash = P2ParentCoin::puzzle_hash(Some(DIG_ASSET_ID));
-    if coin.puzzle_hash != p2_parent_inner_hash.into() {
+    let p2_parent_hash = P2ParentCoin::puzzle_hash(Some(DIG_ASSET_ID));
+    if coin.puzzle_hash != p2_parent_hash.into() {
         return Err(WalletError::PuzzleHashMismatch(format!(
             "Coin {} is not locked by the $DIG collateral puzzle",
             coin.coin_id()
@@ -153,16 +145,16 @@ pub async fn fetch_dig_collateral_coin(
     let parent_solution_ptr = parent_puzzle_and_solution_response
         .solution
         .to_clvm(&mut allocator)?;
-    let parent_puzzle = Puzzle::parse(&mut allocator, parent_puzzle_ptr);
+    let parent_puzzle = Puzzle::parse(&allocator, parent_puzzle_ptr);
 
-    Ok(P2ParentCoin::parse_child(
+    P2ParentCoin::parse_child(
         &mut allocator,
         parent_state.coin,
         parent_puzzle,
         parent_solution_ptr,
     )
     .unwrap()
-    .ok_or(WalletError::Parse)?)
+    .ok_or(WalletError::Parse)
 }
 
 pub async fn get_unspent_coin_states(
@@ -389,6 +381,38 @@ pub fn create_server_coin(
         coin_spends: ctx.take(),
         server_coin,
     })
+}
+
+pub fn spend_dig_collateral_coin(
+    synthetic_key: PublicKey,
+    fee_coins: Vec<Coin>,
+    selected_collateral_coin: P2ParentCoin,
+    fee: u64,
+) -> Result<Vec<CoinSpend>, WalletError> {
+    let mut ctx = SpendContext::new();
+    let p2_layer = StandardLayer::new(synthetic_key);
+    let p2_puzzle_hash: Bytes32 = p2_layer.tree_hash().into();
+
+    // use actions and spends to attach fee to transaction and generate change
+    let actions = [Action::fee(fee)];
+    let mut fee_spends = Spends::new(p2_puzzle_hash);
+
+    // add fee coins to spends
+    for fee_xch_coin in fee_coins {
+        fee_spends.add(fee_xch_coin);
+    }
+
+    // add the collateral p2 parent spend to the spend context
+    let p2_delegated_spend = p2_layer.spend_with_conditions(&mut ctx, Conditions::new())?;
+    selected_collateral_coin.spend(&mut ctx, p2_delegated_spend, ())?;
+
+    let deltas = fee_spends.apply(&mut ctx, &actions)?;
+    let index_map = indexmap! {p2_puzzle_hash => synthetic_key};
+
+    let _outputs =
+        fee_spends.finish_with_keys(&mut ctx, &deltas, Relation::AssertConcurrent, &index_map)?;
+
+    Ok(ctx.take())
 }
 
 pub async fn spend_xch_server_coins(
@@ -1351,7 +1375,7 @@ pub async fn prove_dig_cat_coin(
 
     // 3) Convert puzzle to CLVM
     let parent_puzzle_ptr = ctx.alloc(&parent_puzzle_and_solution.puzzle)?;
-    let parent_puzzle = Puzzle::parse(&mut ctx, parent_puzzle_ptr);
+    let parent_puzzle = Puzzle::parse(&ctx, parent_puzzle_ptr);
 
     // 4) Convert solution to CLVM
     let parent_solution = ctx.alloc(&parent_puzzle_and_solution.solution)?;
