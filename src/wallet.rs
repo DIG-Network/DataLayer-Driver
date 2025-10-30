@@ -31,6 +31,7 @@ use chia_wallet_sdk::driver::{
     OracleLayer, P2ParentCoin, Puzzle, Relation, SpendContext, SpendWithConditions, Spends,
     StandardLayer, WriterLayer,
 };
+use chia_wallet_sdk::prelude::AssertConcurrentSpend;
 // Import proof types from our own crate's rust module
 use crate::error::WalletError;
 pub use crate::types::{coin_records_to_states, SuccessResponse, XchServerCoin};
@@ -60,40 +61,20 @@ pub const DIG_ASSET_ID: Bytes32 = Bytes32::new(hex!(
 
 pub const MAX_CLVM_COST: u64 = 11_000_000_000;
 
-pub async fn get_unspent_coin_states_by_hints(
-    hints: Vec<Bytes32>,
+pub async fn get_unspent_coin_states_by_hint(
+    peer: &Peer,
+    hint: Bytes32,
     network_type: NetworkType,
-) -> Result<Vec<CoinState>, WalletError> {
-    let coinset_client = match network_type {
-        NetworkType::Mainnet => CoinsetClient::mainnet(),
-        NetworkType::Testnet11 => CoinsetClient::testnet11(),
+) -> Result<UnspentCoinStates, WalletError> {
+    let header_hash = match network_type {
+        NetworkType::Mainnet => MAINNET_CONSTANTS.genesis_challenge,
+        NetworkType::Testnet11 => TESTNET11_CONSTANTS.genesis_challenge,
     };
-
-    let get_coin_records_response = coinset_client
-        .get_coin_records_by_hints(hints, Some(DIG_MIN_HEIGHT), None, Some(false))
-        .await
-        .map_err(|error| WalletError::CoinRetrievalFailure(error.to_string()))?;
-
-    if get_coin_records_response.success
-        && get_coin_records_response.error.is_none()
-        && get_coin_records_response.coin_records.is_some()
-    {
-        Ok(coin_records_to_states(
-            get_coin_records_response.coin_records.unwrap_or(vec![]),
-        ))
-    } else {
-        let error_string = if let Some(error) = get_coin_records_response.error {
-            error
-        } else {
-            "An unknown error occurred".to_string()
-        };
-        Err(WalletError::CoinRetrievalFailure(error_string))
-    }
+    Ok(get_unspent_coin_states(peer, hint, None, header_hash, true).await?)
 }
 
 /// Instantiates a $DIG collateral coin
 /// Verifies that coin is unspent and locked by the $DIG P2Parent puzzle
-/// Optionally validate coin ownership
 pub async fn fetch_dig_collateral_coin(
     peer: &Peer,
     coin_state: CoinState,
@@ -101,7 +82,7 @@ pub async fn fetch_dig_collateral_coin(
     let coin = coin_state.coin;
 
     // verify coin is unspent
-    if coin_state.spent_height.is_some() {
+    if matches!(coin_state.spent_height, Some(x) if x != 0) {
         return Err(WalletError::CoinIsAlreadySpent);
     }
 
@@ -122,7 +103,7 @@ pub async fn fetch_dig_collateral_coin(
     let parent_state = peer
         .request_coin_state(
             vec![coin.parent_coin_info],
-            Some(DIG_MIN_HEIGHT),
+            None,
             MAINNET_CONSTANTS.genesis_challenge,
             false,
         )
@@ -152,8 +133,7 @@ pub async fn fetch_dig_collateral_coin(
         parent_state.coin,
         parent_puzzle,
         parent_solution_ptr,
-    )
-    .unwrap()
+    )?
     .ok_or(WalletError::Parse)
 }
 
@@ -393,18 +373,29 @@ pub fn spend_dig_collateral_coin(
     let p2_layer = StandardLayer::new(synthetic_key);
     let p2_puzzle_hash: Bytes32 = p2_layer.tree_hash().into();
 
+    let collateral_spend_conditions = Conditions::new().create_coin(
+        p2_puzzle_hash,
+        selected_collateral_coin.coin.amount,
+        Memos::None,
+    );
+
+    // add the collateral p2 parent spend to the spend context
+    let p2_delegated_spend =
+        p2_layer.spend_with_conditions(&mut ctx, collateral_spend_conditions)?;
+
+    selected_collateral_coin.spend(&mut ctx, p2_delegated_spend, ())?;
+
     // use actions and spends to attach fee to transaction and generate change
     let actions = [Action::fee(fee)];
     let mut fee_spends = Spends::new(p2_puzzle_hash);
+    fee_spends.conditions.required.push(AssertConcurrentSpend::new(
+        selected_collateral_coin.coin.coin_id(),
+    ));
 
     // add fee coins to spends
     for fee_xch_coin in fee_coins {
         fee_spends.add(fee_xch_coin);
     }
-
-    // add the collateral p2 parent spend to the spend context
-    let p2_delegated_spend = p2_layer.spend_with_conditions(&mut ctx, Conditions::new())?;
-    selected_collateral_coin.spend(&mut ctx, p2_delegated_spend, ())?;
 
     let deltas = fee_spends.apply(&mut ctx, &actions)?;
     let index_map = indexmap! {p2_puzzle_hash => synthetic_key};
@@ -1357,7 +1348,7 @@ pub async fn prove_dig_cat_coin(
     let parent_state_response = peer
         .request_coin_state(
             vec![coin.parent_coin_info],
-            Some(DIG_MIN_HEIGHT),
+            None,
             MAINNET_CONSTANTS.genesis_challenge,
             false,
         )

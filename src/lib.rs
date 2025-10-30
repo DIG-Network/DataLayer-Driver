@@ -20,7 +20,7 @@ pub use chia::protocol::{Bytes, Bytes32, Coin, CoinSpend, CoinState, Program, Sp
 pub use chia::puzzles::{EveProof, LineageProof, Proof};
 pub use chia_wallet_sdk::client::Peer;
 pub use chia_wallet_sdk::driver::{
-    DataStore, DataStoreInfo, DataStoreMetadata, DelegatedPuzzle, P2ParentCoin,
+    DataStore, DataStoreInfo, DataStoreMetadata, DelegatedPuzzle, P2ParentCoin
 };
 pub use chia_wallet_sdk::utils::Address;
 
@@ -576,13 +576,13 @@ pub mod async_api {
         .await?)
     }
 
-    /// Gets all unspent coins hinted by one of the provided hints.
-    /// Uses the coinset.org API rather than a peer connection
+    /// Gets all unspent coins hinted by the provided hint.
     pub async fn get_unspent_coins_by_hints(
+        peer: &Peer,
+        hint: Bytes32,
         network: NetworkType,
-        hints: Vec<Bytes32>,
-    ) -> Result<Vec<CoinState>> {
-        Ok(wallet::get_unspent_coin_states_by_hints(hints, network).await?)
+    ) -> Result<UnspentCoinStates> {
+        Ok(wallet::get_unspent_coin_states_by_hint(peer, hint, network).await?)
     }
 
     /// Gets all unspent coins for a puzzle hash (Rust API version).
