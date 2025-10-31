@@ -20,7 +20,7 @@ pub use chia::protocol::{Bytes, Bytes32, Coin, CoinSpend, CoinState, Program, Sp
 pub use chia::puzzles::{EveProof, LineageProof, Proof};
 pub use chia_wallet_sdk::client::Peer;
 pub use chia_wallet_sdk::driver::{
-    DataStore, DataStoreInfo, DataStoreMetadata, DelegatedPuzzle, P2ParentCoin
+    DataStore, DataStoreInfo, DataStoreMetadata, DelegatedPuzzle, P2ParentCoin,
 };
 pub use chia_wallet_sdk::utils::Address;
 

@@ -24,7 +24,6 @@ use chia::puzzles::{
 };
 use chia_puzzles::SINGLETON_LAUNCHER_HASH;
 use chia_wallet_sdk::client::Peer;
-use chia_wallet_sdk::coinset::{ChiaRpcClient, CoinsetClient};
 use chia_wallet_sdk::driver::{
     get_merkle_tree, Action, Asset, Cat, DataStore, DataStoreMetadata, DelegatedPuzzle, Did,
     DidInfo, DriverError, HashedPtr, Id, IntermediateLauncher, Launcher, Layer, NftMint,
@@ -37,7 +36,7 @@ use crate::error::WalletError;
 pub use crate::types::{coin_records_to_states, SuccessResponse, XchServerCoin};
 use crate::types::{EveProof, LineageProof, Proof};
 use crate::xch_server_coin::{urls_from_conditions, MirrorArgs, MirrorSolution, NewXchServerCoin};
-use crate::{morph_store_launcher_id, NetworkType, UnspentCoinStates, DIG_MIN_HEIGHT};
+use crate::{morph_store_launcher_id, NetworkType, UnspentCoinStates};
 use chia_wallet_sdk::signer::{AggSigConstants, RequiredSignature, SignerError};
 use chia_wallet_sdk::types::{
     announcement_id,
@@ -70,7 +69,7 @@ pub async fn get_unspent_coin_states_by_hint(
         NetworkType::Mainnet => MAINNET_CONSTANTS.genesis_challenge,
         NetworkType::Testnet11 => TESTNET11_CONSTANTS.genesis_challenge,
     };
-    Ok(get_unspent_coin_states(peer, hint, None, header_hash, true).await?)
+    get_unspent_coin_states(peer, hint, None, header_hash, true).await
 }
 
 /// Instantiates a $DIG collateral coin
@@ -388,9 +387,12 @@ pub fn spend_dig_collateral_coin(
     // use actions and spends to attach fee to transaction and generate change
     let actions = [Action::fee(fee)];
     let mut fee_spends = Spends::new(p2_puzzle_hash);
-    fee_spends.conditions.required.push(AssertConcurrentSpend::new(
-        selected_collateral_coin.coin.coin_id(),
-    ));
+    fee_spends
+        .conditions
+        .required
+        .push(AssertConcurrentSpend::new(
+            selected_collateral_coin.coin.coin_id(),
+        ));
 
     // add fee coins to spends
     for fee_xch_coin in fee_coins {
