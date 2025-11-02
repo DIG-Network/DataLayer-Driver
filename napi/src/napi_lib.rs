@@ -7,7 +7,7 @@ use crate::js::{
 
 // Import from the main datalayer-driver crate
 use datalayer_driver::{
-    master_to_wallet_unhardened, rust, server_coin, wallet, Bytes as RustBytes,
+    master_to_wallet_unhardened, types, wallet, xch_server_coin, Bytes as RustBytes,
     Bytes32 as RustBytes32, Coin as RustCoin, CoinSpend as RustCoinSpend,
     DataStore as RustDataStore, DataStoreInfo as RustDataStoreInfo,
     DataStoreMetadata as RustDataStoreMetadata, DelegatedPuzzle as RustDelegatedPuzzle,
@@ -388,9 +388,9 @@ pub struct UnspentCoinsResponse {
     pub last_header_hash: Buffer,
 }
 
-impl FromJs<UnspentCoinsResponse> for rust::UnspentCoinsResponse {
+impl FromJs<UnspentCoinsResponse> for types::UnspentCoinsResponse {
     fn from_js(value: UnspentCoinsResponse) -> Result<Self> {
-        Ok(rust::UnspentCoinsResponse {
+        Ok(types::UnspentCoinsResponse {
             coins: value
                 .coins
                 .into_iter()
@@ -402,7 +402,7 @@ impl FromJs<UnspentCoinsResponse> for rust::UnspentCoinsResponse {
     }
 }
 
-impl ToJs<UnspentCoinsResponse> for rust::UnspentCoinsResponse {
+impl ToJs<UnspentCoinsResponse> for types::UnspentCoinsResponse {
     fn to_js(&self) -> Result<UnspentCoinsResponse> {
         Ok(UnspentCoinsResponse {
             coins: self
@@ -594,7 +594,7 @@ impl Peer {
         previous_height: Option<u32>,
         previous_header_hash: Buffer,
     ) -> napi::Result<UnspentCoinsResponse> {
-        let resp: rust::UnspentCoinsResponse = get_unspent_coin_states(
+        let resp: types::UnspentCoinsResponse = get_unspent_coin_states(
             &self.inner.clone(),
             RustBytes32::from_js(puzzle_hash)?,
             previous_height,
@@ -644,7 +644,7 @@ impl Peer {
                 let peer = sim.lock().await;
                 let inner = peer.lock().await;
                 Ok(inner.height())
-            },
+            }
             None => Err(crate::js::err(
                 "Simulator is not available for this peer type",
             )),
@@ -737,9 +737,9 @@ impl Peer {
         coin_state: CoinState,
         max_cost: BigInt,
     ) -> napi::Result<crate::js::ServerCoin> {
-        let coin = wallet::fetch_server_coin(
+        let coin = wallet::fetch_xch_server_coin(
             &self.inner.clone(),
-            rust::CoinState::from_js(coin_state)?,
+            types::CoinState::from_js(coin_state)?,
             u64::from_js(max_cost)?,
         )
         .await
@@ -934,7 +934,7 @@ impl Peer {
         fee: BigInt,
         for_testnet: bool,
     ) -> napi::Result<Vec<CoinSpend>> {
-        let coin = wallet::spend_server_coins(
+        let coin = wallet::spend_xch_server_coins(
             &self.inner,
             RustPublicKey::from_js(synthetic_key)?,
             selected_coins
@@ -1169,7 +1169,7 @@ pub fn send_xch(
 /// @param {BigInt} offset - The offset to add.
 #[napi]
 pub fn morph_launcher_id(launcher_id: Buffer, offset: BigInt) -> napi::Result<Buffer> {
-    server_coin::morph_launcher_id(
+    xch_server_coin::morph_launcher_id(
         RustBytes32::from_js(launcher_id)?,
         &u64::from_js(offset)?.into(),
     )
@@ -1803,7 +1803,7 @@ pub async fn generate_did_proof(
     did_coin: Coin,
     for_testnet: bool,
 ) -> napi::Result<crate::js::DidProofResult> {
-    let did_coin = rust::Coin::from_js(did_coin)?;
+    let did_coin = types::Coin::from_js(did_coin)?;
     let network = if for_testnet {
         wallet::TargetNetwork::Testnet11
     } else {
@@ -1832,9 +1832,9 @@ pub fn generate_did_proof_manual(
     parent_coin: Option<Coin>,
     parent_inner_puzzle_hash: Option<Buffer>,
 ) -> napi::Result<Proof> {
-    let did_coin = rust::Coin::from_js(did_coin)?;
+    let did_coin = types::Coin::from_js(did_coin)?;
     let parent_coin = if let Some(coin) = parent_coin {
-        Some(rust::Coin::from_js(coin)?)
+        Some(types::Coin::from_js(coin)?)
     } else {
         None
     };
@@ -1862,7 +1862,7 @@ pub async fn generate_did_proof_from_chain(
     did_coin: Coin,
     for_testnet: bool,
 ) -> napi::Result<Proof> {
-    let did_coin = rust::Coin::from_js(did_coin)?;
+    let did_coin = types::Coin::from_js(did_coin)?;
     let network = if for_testnet {
         wallet::TargetNetwork::Testnet11
     } else {
@@ -1891,7 +1891,7 @@ pub fn create_simple_did(
     let synthetic_key = RustPublicKey::from_js(synthetic_key)?;
     let selected_coins = selected_coins
         .into_iter()
-        .map(rust::Coin::from_js)
+        .map(types::Coin::from_js)
         .collect::<Result<Vec<_>>>()
         .map_err(crate::js::err)?;
     let fee = u64::from_js(fee)?;

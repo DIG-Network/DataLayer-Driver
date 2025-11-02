@@ -35,7 +35,7 @@ jobs:
           toolchain: stable
 
       - name: Clippy
-        run: rustup component add clippy && cargo clippy --workspace --all-features --all-targets
+        run: rustup component add clippy && cargo clippy --all-targets --all-features -- -D warnings
 
       - name: Unused dependencies
         run: |
@@ -43,7 +43,7 @@ jobs:
           cargo machete
 
       - name: Fmt
-        run: rustup component add rustfmt && cargo fmt --all
+        run: rustup component add rustfmt && cargo fmt --all -- --check
 
   build:
     needs: rust-checks

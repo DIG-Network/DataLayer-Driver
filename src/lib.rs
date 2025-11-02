@@ -19,7 +19,9 @@ pub use chia::bls::{master_to_wallet_unhardened, PublicKey, SecretKey, Signature
 pub use chia::protocol::{Bytes, Bytes32, Coin, CoinSpend, CoinState, Program, SpendBundle};
 pub use chia::puzzles::{EveProof, LineageProof, Proof};
 pub use chia_wallet_sdk::client::Peer;
-pub use chia_wallet_sdk::driver::{DataStore, DataStoreInfo, DataStoreMetadata, DelegatedPuzzle};
+pub use chia_wallet_sdk::driver::{
+    DataStore, DataStoreInfo, DataStoreMetadata, DelegatedPuzzle, P2ParentCoin,
+};
 pub use chia_wallet_sdk::utils::Address;
 
 // Re-export async_api and constants modules at the top level for convenience
@@ -27,30 +29,49 @@ pub use async_api::{connect_peer, connect_random, create_tls_connector, NetworkT
 pub use constants::{get_mainnet_genesis_challenge, get_testnet11_genesis_challenge};
 
 // Internal modules
-pub mod rust;
-pub mod server_coin;
+mod error;
+pub mod types;
 pub mod wallet;
+pub mod xch_server_coin;
 
 // Re-export types from internal modules
-pub use rust::{BlsPair, SimulatorPuzzle, UnspentCoinsResponse};
-pub use server_coin::{morph_launcher_id, ServerCoin};
-pub use wallet::{
-    create_simple_did, generate_did_proof,
-    generate_did_proof_from_chain, generate_did_proof_manual, get_fee_estimate,
-    get_header_hash, get_store_creation_height, get_unspent_coin_states, is_coin_spent,
-    look_up_possible_launchers, mint_nft,
-    spend_server_coins, subscribe_to_coin_states,
-    sync_store, sync_store_using_launcher_id, unsubscribe_from_coin_states,
-     verify_signature, DataStoreInnerSpend, NewServerCoin,
-    PossibleLaunchersResponse, SuccessResponse, SyncStoreResponse, TargetNetwork,
-    UnspentCoinStates,
+pub use types::{
+    BlsPair, SimulatorPuzzle, SuccessResponse, UnspentCoinStates, UnspentCoinsResponse,
 };
+pub use wallet::{
+    create_simple_did, generate_did_proof, generate_did_proof_from_chain,
+    generate_did_proof_manual, get_fee_estimate, get_header_hash, get_store_creation_height,
+    get_unspent_coin_states, is_coin_spent, look_up_possible_launchers, mint_nft,
+    spend_xch_server_coins, subscribe_to_coin_states, sync_store, sync_store_using_launcher_id,
+    unsubscribe_from_coin_states, verify_signature, DataStoreInnerSpend, PossibleLaunchersResponse,
+    SyncStoreResponse, TargetNetwork,
+};
+pub use xch_server_coin::{morph_launcher_id, XchServerCoin};
+
+use hex_literal::hex;
 
 // Type aliases for convenience
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
 // Helper functions for common conversions
 use chia::puzzles::{standard::StandardArgs, DeriveSynthetic};
+use chia_wallet_sdk::prelude::ToTreeHash;
+// Helper functions for common conversions
+use xch_server_coin::NewXchServerCoin;
+
+pub const DIG_MIN_HEIGHT: u32 = 5777842;
+pub const DIG_MIN_HEIGHT_HEADER_HASH: Bytes32 = Bytes32::new(hex!(
+    "b29a4daac2434fd17a36e15ba1aac5d65012d4a66f99bed0bf2b5342e92e562c"
+));
+
+pub const DIG_STORE_LAUNCHER_ID_MORPH: &str = "DIG_STORE";
+
+/// Morphs a DIG store launcher ID into the DIG namespace. Store launcher IDs should be morphed when hinted on coins
+pub fn morph_store_launcher_id(store_launcher_id: Bytes32) -> Bytes32 {
+    (store_launcher_id, DIG_STORE_LAUNCHER_ID_MORPH)
+        .tree_hash()
+        .into()
+}
 
 /// Converts a master public key to a wallet synthetic key.
 pub fn master_public_key_to_wallet_synthetic_key(public_key: &PublicKey) -> PublicKey {
@@ -127,7 +148,7 @@ pub fn spend_bundle_to_hex(spend_bundle: &SpendBundle) -> Result<String> {
 
 /// Adds an offset to a launcher id to make it deterministically unique from the original.
 pub fn morph_launcher_id_wrapper(launcher_id: Bytes32, offset: u64) -> Bytes32 {
-    server_coin::morph_launcher_id(launcher_id, &offset.into())
+    xch_server_coin::morph_launcher_id(launcher_id, &offset.into())
 }
 
 /// Output for send_xch function
@@ -146,7 +167,7 @@ pub fn send_xch(
     fee: u64,
 ) -> Result<Vec<CoinSpend>> {
     let outputs: Vec<(Bytes32, u64, Vec<Bytes>)> = outputs
-                .iter()
+        .iter()
         .map(|output| (output.puzzle_hash, output.amount, output.memos.clone()))
         .collect();
 
@@ -182,14 +203,14 @@ pub fn add_fee(
 pub fn sign_coin_spends(
     coin_spends: &[CoinSpend],
     private_keys: &[SecretKey],
-        for_testnet: bool,
+    for_testnet: bool,
 ) -> Result<Signature> {
     Ok(wallet::sign_coin_spends(
         coin_spends.to_vec(),
         private_keys.to_vec(),
-            if for_testnet {
+        if for_testnet {
             wallet::TargetNetwork::Testnet11
-            } else {
+        } else {
             wallet::TargetNetwork::Mainnet
         },
     )?)
@@ -306,12 +327,12 @@ pub fn melt_store(store: DataStore, owner_pk: PublicKey) -> Result<Vec<CoinSpend
 /// Creates a server coin (Rust API version).
 pub fn create_server_coin(
     synthetic_key: PublicKey,
-        selected_coins: Vec<Coin>,
+    selected_coins: Vec<Coin>,
     hint: Bytes32,
     uris: Vec<String>,
     amount: u64,
     fee: u64,
-) -> Result<NewServerCoin> {
+) -> Result<NewXchServerCoin> {
     Ok(wallet::create_server_coin(
         synthetic_key,
         selected_coins,
@@ -325,6 +346,7 @@ pub fn create_server_coin(
 /// Async functions for blockchain interaction (Rust API versions)
 pub mod async_api {
     use super::*;
+    use chia_wallet_sdk::prelude::Cat;
     use futures_util::stream::{FuturesUnordered, StreamExt};
     use rand::seq::SliceRandom;
     use std::net::SocketAddr;
@@ -467,7 +489,7 @@ pub mod async_api {
     pub async fn mint_nft(
         peer: &Peer,
         synthetic_key: PublicKey,
-    selected_coins: Vec<Coin>,
+        selected_coins: Vec<Coin>,
         did_string: &str,
         recipient_puzzle_hash: Bytes32,
         metadata: chia::puzzles::nft::NftMetadata,
@@ -515,7 +537,7 @@ pub mod async_api {
     /// Creates a simple DID (Rust API version).
     pub fn create_simple_did(
         synthetic_key: PublicKey,
-    selected_coins: Vec<Coin>,
+        selected_coins: Vec<Coin>,
         fee: u64,
     ) -> Result<(Vec<CoinSpend>, Coin)> {
         Ok(wallet::create_simple_did(
@@ -552,6 +574,15 @@ pub mod async_api {
             with_history,
         )
         .await?)
+    }
+
+    /// Gets all unspent coins hinted by the provided hint.
+    pub async fn get_unspent_coins_by_hints(
+        peer: &Peer,
+        hint: Bytes32,
+        network: NetworkType,
+    ) -> Result<UnspentCoinStates> {
+        Ok(wallet::get_unspent_coin_states_by_hint(peer, hint, network).await?)
     }
 
     /// Gets all unspent coins for a puzzle hash (Rust API version).
@@ -597,6 +628,14 @@ pub mod async_api {
         spend_bundle: SpendBundle,
     ) -> Result<chia::protocol::TransactionAck> {
         Ok(wallet::broadcast_spend_bundle(peer, spend_bundle).await?)
+    }
+
+    pub async fn prove_dig_cat_coin(
+        peer: &Peer,
+        coin: &Coin,
+        coin_created_height: u32,
+    ) -> Result<Cat> {
+        Ok(wallet::prove_dig_cat_coin(peer, coin, coin_created_height).await?)
     }
 }
 
