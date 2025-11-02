@@ -5,9 +5,9 @@ members = [".", "napi"]
 [package]
 edition = "2021"
 name = "datalayer-driver"
-version = "1.0.1"
+version = "2.0.0"
 license = "MIT"
-authors = ["yakuhito <y@kuhi.to>"]
+authors = ["yakuhito <y@kuhi.to>", "William Wills <wwills2@protonmail.com>"]
 homepage = "https://github.com/DIG-Network/DataLayer-Driver"
 repository = "https://github.com/DIG-Network/DataLayer-Driver"
 description = "Native Chia DataLayer Driver for storing and retrieving data in Chia blockchain"
