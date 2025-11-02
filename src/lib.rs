@@ -629,7 +629,9 @@ pub mod async_api {
     ) -> Result<chia::protocol::TransactionAck> {
         Ok(wallet::broadcast_spend_bundle(peer, spend_bundle).await?)
     }
-
+    
+    /// Utility function to validate that a coin is a $DIG CAT coin. Returns an instantiated Cat
+    /// utility for the coin if it's a valid $DIG CAT
     pub async fn prove_dig_cat_coin(
         peer: &Peer,
         coin: &Coin,
