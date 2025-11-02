@@ -260,6 +260,7 @@ pub fn send_xch(
     Ok(ctx.take())
 }
 
+/// Uses the specified $DIG to create a collateral coin for the provided DIG store ID (launcher ID)
 pub fn create_dig_collateral_coin(
     dig_cats: Vec<Cat>,
     collateral_amount: u64,
@@ -362,6 +363,8 @@ pub fn create_server_coin(
     })
 }
 
+/// Spends the specified $DIG collateral coin to de-collateralize the store and return spendable
+/// $DIG to the wallet that created the collateral coin.
 pub fn spend_dig_collateral_coin(
     synthetic_key: PublicKey,
     fee_coins: Vec<Coin>,
@@ -1339,6 +1342,8 @@ pub async fn look_up_possible_launchers(
     })
 }
 
+/// Utility function to validate that a coin is a $DIG CAT coin. Returns an instantiated Cat
+/// utility for the coin if it's a valid $DIG CAT
 pub async fn prove_dig_cat_coin(
     peer: &Peer,
     coin: &Coin,
