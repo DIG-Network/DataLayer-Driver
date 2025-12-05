@@ -58,7 +58,6 @@ pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + S
 
 // Helper functions for common conversions
 use chia::puzzles::{standard::StandardArgs, DeriveSynthetic};
-use chia_wallet_sdk::prelude::ToTreeHash;
 // Helper functions for common conversions
 use xch_server_coin::NewXchServerCoin;
 

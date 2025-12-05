@@ -15,7 +15,9 @@ use num_bigint::BigInt;
 
 pub struct DigCollateralCoin {
     inner: P2ParentCoin,
+    #[allow(dead_code)]
     morphed_store_id: Option<Bytes32>,
+    #[allow(dead_code)]
     mirror_urls: Option<Vec<String>>,
 }
 
@@ -103,7 +105,7 @@ impl DigCollateralCoin {
         ))?;
 
         let memos_vec = match memos {
-            Memos::Some(node) => Vec::<Bytes>::from_clvm(&mut allocator, node)
+            Memos::Some(node) => Vec::<Bytes>::from_clvm(&allocator, node)
                 .ok()
                 .unwrap_or_default(),
             Memos::None => Vec::new(),
@@ -116,8 +118,8 @@ impl DigCollateralCoin {
         };
 
         let mut mirror_urls_vec = Vec::new();
-        for i in 1..memos_vec.len() {
-            if let Ok(url_string) = String::from_utf8(memos_vec[i].to_vec()) {
+        for memo in memos_vec.iter().skip(1) {
+            if let Ok(url_string) = String::from_utf8(memo.to_vec()) {
                 mirror_urls_vec.push(url_string);
             }
         }

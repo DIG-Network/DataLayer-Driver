@@ -30,9 +30,9 @@ use chia::puzzles::{
 use chia_puzzles::SINGLETON_LAUNCHER_HASH;
 use chia_wallet_sdk::client::Peer;
 use chia_wallet_sdk::driver::{
-    get_merkle_tree, Asset, DataStore, DataStoreMetadata, DelegatedPuzzle, Did, DidInfo,
-    DriverError, HashedPtr, IntermediateLauncher, Launcher, Layer, NftMint, OracleLayer,
-    SpendContext, SpendWithConditions, StandardLayer, WriterLayer,
+    get_merkle_tree, DataStore, DataStoreMetadata, DelegatedPuzzle, Did, DidInfo, DriverError,
+    HashedPtr, IntermediateLauncher, Launcher, Layer, NftMint, OracleLayer, SpendContext,
+    SpendWithConditions, StandardLayer, WriterLayer,
 };
 use chia_wallet_sdk::signer::{AggSigConstants, RequiredSignature, SignerError};
 use chia_wallet_sdk::types::{
