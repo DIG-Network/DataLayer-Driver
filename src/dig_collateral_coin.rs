@@ -138,6 +138,7 @@ impl DigCollateralCoin {
     }
 
     /// Uses the specified $DIG to create a collateral coin for the provided DIG store ID (launcher ID)
+    #[allow(clippy::result_large_err)]
     pub fn create(
         dig_coins: Vec<DigCoin>,
         collateral_amount: u64,
@@ -203,6 +204,7 @@ impl DigCollateralCoin {
 
     /// Builds the spend bundle for spending the $DIG collateral coin to de-collateralize
     /// the store and return spendable $DIG to the wallet that created the collateral coin.
+    #[allow(clippy::result_large_err)]
     pub fn spend(
         &self,
         synthetic_key: PublicKey,
