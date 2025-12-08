@@ -23,14 +23,15 @@ pub enum WalletError {
     #[error("{0:?}")]
     Driver(#[from] DriverError),
 
-    #[error("ParseError")]
-    Parse,
+    #[error("ParseError: {0}")]
+    Parse(String),
 
     #[error("UnknownCoin")]
     UnknownCoin,
 
     #[error("Clvm error")]
     Clvm,
+
     #[error("ToClvm error: {0}")]
     ToClvm(#[from] chia::clvm_traits::ToClvmError),
 
