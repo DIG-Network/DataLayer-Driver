@@ -1,7 +1,9 @@
 use crate::dig_coin::DigCoin;
 use crate::error::WalletError;
 use crate::wallet::DIG_ASSET_ID;
-use crate::{Bytes, Bytes32, Coin, CoinSpend, CoinState, P2ParentCoin, Peer, PublicKey};
+use crate::{
+    Bytes, Bytes32, Coin, CoinSpend, CoinState, LineageProof, P2ParentCoin, Peer, PublicKey,
+};
 use chia::puzzles::Memos;
 use chia::traits::Streamable;
 use chia_wallet_sdk::driver::{
@@ -13,6 +15,7 @@ use clvmr::Allocator;
 use indexmap::indexmap;
 use num_bigint::BigInt;
 
+#[derive(Debug, Clone)]
 pub struct DigCollateralCoin {
     inner: P2ParentCoin,
     #[allow(dead_code)]
@@ -22,8 +25,16 @@ pub struct DigCollateralCoin {
 }
 
 impl DigCollateralCoin {
+    pub fn coin(&self) -> Coin {
+        self.inner.coin
+    }
+
+    pub fn proof(&self) -> LineageProof {
+        self.inner.proof
+    }
+
     /// Morphs a DIG store launcher ID into the DIG store collateral coin namespace.
-    pub fn morph_store_launcher_if_for_collateral(store_launcher_id: Bytes32) -> Bytes32 {
+    pub fn morph_store_launcher_id_for_collateral(store_launcher_id: Bytes32) -> Bytes32 {
         (store_launcher_id, "DIG_STORE_COLLATERAL")
             .tree_hash()
             .into()
@@ -139,67 +150,62 @@ impl DigCollateralCoin {
 
     /// Uses the specified $DIG to create a collateral coin for the provided DIG store ID (launcher ID)
     #[allow(clippy::result_large_err)]
-    pub fn create(
+    pub fn create_collateral(
         dig_coins: Vec<DigCoin>,
-        collateral_amount: u64,
+        amount: u64,
         store_id: Bytes32,
-        mirror_urls: Option<Vec<String>>,
         synthetic_key: PublicKey,
         fee_coins: Vec<Coin>,
         fee: u64,
     ) -> Result<Vec<CoinSpend>, WalletError> {
-        let p2_parent_inner_hash = P2ParentCoin::inner_puzzle_hash(Some(DIG_ASSET_ID));
-
         let mut ctx = SpendContext::new();
 
-        let morphed_store_id = Self::morph_store_launcher_if_for_collateral(store_id);
+        let morphed_store_id = Self::morph_store_launcher_id_for_collateral(store_id);
+        let hint = ctx.hint(morphed_store_id)?;
 
-        let memos = match mirror_urls {
-            Some(urls) => {
-                let mut memos_vec = Vec::with_capacity(urls.len() + 1);
-                memos_vec.push(morphed_store_id.to_vec());
+        Self::build_coin_spends(
+            &mut ctx,
+            hint,
+            dig_coins,
+            amount,
+            synthetic_key,
+            fee_coins,
+            fee,
+        )
+    }
 
-                for url in &urls {
-                    memos_vec.push(url.as_bytes().to_vec());
-                }
+    #[allow(clippy::result_large_err, clippy::too_many_arguments)]
+    pub fn create_mirror(
+        dig_coins: Vec<DigCoin>,
+        amount: u64,
+        store_id: Bytes32,
+        mirror_urls: Vec<String>,
+        epoch: BigInt,
+        synthetic_key: PublicKey,
+        fee_coins: Vec<Coin>,
+        fee: u64,
+    ) -> Result<Vec<CoinSpend>, WalletError> {
+        let mut ctx = SpendContext::new();
+        let morphed_store_id = Self::morph_store_launcher_id_for_mirror(store_id, &epoch);
+        let mut memos_vec = Vec::with_capacity(mirror_urls.len() + 1);
+        memos_vec.push(morphed_store_id.to_vec());
 
-                let memos_node_ptr = ctx.alloc(&memos_vec)?;
-                Memos::Some(memos_node_ptr)
-            }
-            None => ctx.hint(morphed_store_id)?,
-        };
-
-        let actions = [
-            Action::fee(fee),
-            Action::send(
-                Id::Existing(DIG_ASSET_ID),
-                p2_parent_inner_hash.into(),
-                collateral_amount,
-                memos,
-            ),
-        ];
-
-        let p2_layer = StandardLayer::new(synthetic_key);
-        let p2_puzzle_hash: Bytes32 = p2_layer.tree_hash().into();
-        let mut spends = Spends::new(p2_puzzle_hash);
-
-        // add collateral coins to spends
-        for dig_coin in dig_coins {
-            spends.add(dig_coin.cat());
+        for url in &mirror_urls {
+            memos_vec.push(url.as_bytes().to_vec());
         }
 
-        // add fee coins to spends
-        for fee_xch_coin in fee_coins {
-            spends.add(fee_xch_coin);
-        }
+        let memos_node_ptr = ctx.alloc(&memos_vec)?;
+        let memos = Memos::Some(memos_node_ptr);
 
-        let deltas = spends.apply(&mut ctx, &actions)?;
-        let index_map = indexmap! {p2_puzzle_hash => synthetic_key};
-
-        let _outputs =
-            spends.finish_with_keys(&mut ctx, &deltas, Relation::AssertConcurrent, &index_map)?;
-
-        Ok(ctx.take())
+        Self::build_coin_spends(
+            &mut ctx,
+            memos,
+            dig_coins,
+            amount,
+            synthetic_key,
+            fee_coins,
+            fee,
+        )
     }
 
     /// Builds the spend bundle for spending the $DIG collateral coin to de-collateralize
@@ -216,7 +222,7 @@ impl DigCollateralCoin {
 
         if p2_puzzle_hash != self.inner.proof.parent_inner_puzzle_hash {
             return Err(WalletError::PuzzleHashMismatch(
-                "This coin is not owned by this wallet".to_string(),
+                "Collateral coin controlled by another wallet".to_string(),
             ));
         }
 
@@ -253,6 +259,51 @@ impl DigCollateralCoin {
             Relation::AssertConcurrent,
             &index_map,
         )?;
+
+        Ok(ctx.take())
+    }
+
+    #[allow(clippy::result_large_err)]
+    fn build_coin_spends(
+        ctx: &mut SpendContext,
+        memos: Memos,
+        dig_coins: Vec<DigCoin>,
+        amount: u64,
+        synthetic_key: PublicKey,
+        fee_coins: Vec<Coin>,
+        fee: u64,
+    ) -> Result<Vec<CoinSpend>, WalletError> {
+        let p2_parent_inner_hash = P2ParentCoin::inner_puzzle_hash(Some(DIG_ASSET_ID));
+
+        let actions = [
+            Action::fee(fee),
+            Action::send(
+                Id::Existing(DIG_ASSET_ID),
+                p2_parent_inner_hash.into(),
+                amount,
+                memos,
+            ),
+        ];
+
+        let p2_layer = StandardLayer::new(synthetic_key);
+        let p2_puzzle_hash: Bytes32 = p2_layer.tree_hash().into();
+        let mut spends = Spends::new(p2_puzzle_hash);
+
+        // add collateral coins to spends
+        for dig_coin in dig_coins {
+            spends.add(dig_coin.cat());
+        }
+
+        // add fee coins to spends
+        for fee_xch_coin in fee_coins {
+            spends.add(fee_xch_coin);
+        }
+
+        let deltas = spends.apply(ctx, &actions)?;
+        let index_map = indexmap! {p2_puzzle_hash => synthetic_key};
+
+        let _outputs =
+            spends.finish_with_keys(ctx, &deltas, Relation::AssertConcurrent, &index_map)?;
 
         Ok(ctx.take())
     }
