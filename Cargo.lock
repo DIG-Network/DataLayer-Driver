@@ -1088,6 +1088,7 @@ checksum = "2a2330da5de22e8a3cb63252ce2abb30116bf5265e89c0e01bc17015ce30a476"
 name = "datalayer-driver"
 version = "4.0.0"
 dependencies = [
+ "anyhow",
  "chia-bls 0.36.1",
  "chia-consensus",
  "chia-protocol",
@@ -1117,7 +1118,6 @@ dependencies = [
  "chia-bls 0.36.1",
  "chia-protocol",
  "chia-puzzle-types",
- "chia-puzzles",
  "chia-traits 0.36.1",
  "chia-wallet-sdk",
  "datalayer-driver",

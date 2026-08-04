@@ -10,8 +10,6 @@ use crate::types::{EveProof, LineageProof, Proof};
 use crate::xch_server_coin::{urls_from_conditions, MirrorArgs, MirrorSolution, NewXchServerCoin};
 use crate::{NetworkType, UnspentCoinStates};
 use chia_bls::{sign, verify, PublicKey, SecretKey, Signature};
-use clvm_traits::{clvm_tuple, FromClvm, ToClvm};
-use clvm_utils::tree_hash;
 use chia_consensus::consensus_constants::ConsensusConstants;
 use chia_consensus::flags::{DONT_VALIDATE_SIGNATURE, MEMPOOL_MODE};
 use chia_consensus::owned_conditions::OwnedSpendBundleConditions;
@@ -41,6 +39,8 @@ use chia_wallet_sdk::types::{
     Condition, Conditions, MAINNET_CONSTANTS, TESTNET11_CONSTANTS,
 };
 use chia_wallet_sdk::utils::{self, CoinSelectionError};
+use clvm_traits::{clvm_tuple, FromClvm, ToClvm};
+use clvm_utils::tree_hash;
 use clvmr::Allocator;
 use hex_literal::hex;
 
@@ -1124,8 +1124,7 @@ pub fn get_cost(coin_spends: Vec<CoinSpend>) -> Result<u64, WalletError> {
         coin_spends
             .into_iter()
             .map(|cs| (cs.coin, cs.puzzle_reveal, cs.solution)),
-    )
-    ?;
+    )?;
 
     let conds = run_block_generator::<&[u8], _>(
         &mut alloc,
@@ -1368,11 +1367,13 @@ pub fn generate_did_proof_manual(
                 "Parent inner puzzle hash is required".to_string(),
             ))?; // Need inner puzzle hash for lineage proof
 
-            Ok(chia_puzzle_types::Proof::Lineage(chia_puzzle_types::LineageProof {
-                parent_parent_coin_info: parent.parent_coin_info,
-                parent_inner_puzzle_hash,
-                parent_amount: parent.amount,
-            }))
+            Ok(chia_puzzle_types::Proof::Lineage(
+                chia_puzzle_types::LineageProof {
+                    parent_parent_coin_info: parent.parent_coin_info,
+                    parent_inner_puzzle_hash,
+                    parent_amount: parent.amount,
+                },
+            ))
         }
     }
 }
@@ -1431,11 +1432,13 @@ pub async fn generate_did_proof_from_chain(
 
     // For now, create a basic lineage proof
     // This is a simplified approach - in production you'd want to properly parse the parent DID
-    Ok(chia_puzzle_types::Proof::Lineage(chia_puzzle_types::LineageProof {
-        parent_parent_coin_info: parent_coin_state.coin.parent_coin_info,
-        parent_inner_puzzle_hash: Bytes32::default(), // Would need to parse from parent spend
-        parent_amount: parent_coin_state.coin.amount,
-    }))
+    Ok(chia_puzzle_types::Proof::Lineage(
+        chia_puzzle_types::LineageProof {
+            parent_parent_coin_info: parent_coin_state.coin.parent_coin_info,
+            parent_inner_puzzle_hash: Bytes32::default(), // Would need to parse from parent spend
+            parent_amount: parent_coin_state.coin.amount,
+        },
+    ))
 }
 
 /// Creates a simple DID from a private key and selected coins.
@@ -1677,4 +1680,80 @@ pub async fn resolve_did_string_and_generate_proof(
     let proof = generate_did_proof_from_chain(peer, current_did_coin, network).await?;
 
     Ok((proof, current_did_coin))
+}
+
+#[cfg(test)]
+mod melt_kat {
+    //! Custody KAT pinning `DataStore::from_spend`'s melt signal under the
+    //! chia-wallet-sdk 0.34 family (dig_ecosystem#2133).
+    //!
+    //! The just-merged digstore-chain #1981 melt classifier depends on the load-
+    //! bearing fact that a childless datastore singleton spend (an owner melt)
+    //! surfaces as `Err(DriverError::MissingChild)`, while a spend that recreates
+    //! the datastore surfaces as `Ok(Some(_))`. This test drives a real
+    //! peer-simulator mint -> melt and asserts both signals hold under 0.34.
+    use super::*;
+    use chia_wallet_sdk::test::{BlsPair, Simulator};
+
+    #[test]
+    fn from_spend_reports_owner_melt_as_missing_child() -> anyhow::Result<()> {
+        let mut sim = Simulator::new();
+        let owner = BlsPair::default();
+
+        // In the simulator the standard puzzle is curried directly on the pair's
+        // public key, so that key doubles as the "synthetic" key our wallet API
+        // expects and the pair's secret key signs the spends.
+        let owner_puzzle_hash: Bytes32 = StandardArgs::curry_tree_hash(owner.pk).into();
+        let funding_coin = sim.new_coin(owner_puzzle_hash, 1);
+
+        // Mint a datastore (no delegation layers, zero fee) and land it on chain.
+        let minted = mint_store(
+            owner.pk,
+            vec![funding_coin],
+            Bytes32::new([1; 32]),
+            None,
+            None,
+            None,
+            None,
+            owner_puzzle_hash,
+            vec![],
+            0,
+        )?;
+        let datastore = minted.new_datastore.clone();
+        sim.spend_coins(minted.coin_spends.clone(), std::slice::from_ref(&owner.sk))?;
+
+        // Positive control: the launcher spend that CREATES the datastore (it
+        // recreates the singleton with an odd-amount child) must be recognised as
+        // a datastore, i.e. `Ok(Some(_))`. This proves `from_spend` genuinely
+        // inspects the recreated child rather than returning the melt signal for
+        // every datastore singleton spend.
+        let mut ctx = SpendContext::new();
+        let launcher_spend = minted
+            .coin_spends
+            .iter()
+            .find(|cs| cs.coin.puzzle_hash == SINGLETON_LAUNCHER_HASH.into())
+            .expect("mint must contain the singleton launcher spend");
+        let launched = DataStore::<DataStoreMetadata>::from_spend(&mut ctx, launcher_spend, &[])?;
+        assert!(
+            launched.is_some(),
+            "from_spend must recognise the datastore-creating launcher spend as Ok(Some)"
+        );
+
+        // Melt the datastore and land the melt on chain (proving it is a valid,
+        // fully-executable datastore singleton spend, not a malformed one).
+        let melt_spends = melt_store(datastore, owner.pk)?;
+        assert_eq!(melt_spends.len(), 1, "melt produces exactly one spend");
+        sim.spend_coins(melt_spends.clone(), std::slice::from_ref(&owner.sk))?;
+
+        // The pinned property: a valid datastore singleton spend that recreates no
+        // odd-amount child (the owner melt) is reported as `Err(MissingChild)`.
+        let mut ctx = SpendContext::new();
+        let result = DataStore::<DataStoreMetadata>::from_spend(&mut ctx, &melt_spends[0], &[]);
+        assert!(
+            matches!(result, Err(DriverError::MissingChild)),
+            "0.34 must still surface an owner melt as Err(DriverError::MissingChild), got {result:?}"
+        );
+
+        Ok(())
+    }
 }

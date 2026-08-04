@@ -35,6 +35,9 @@ futures-util = "0.3"
 clvm-traits = "0.36.1"
 indexmap = "2.11.4"
 
+[dev-dependencies]
+anyhow = "1.0.86"
+
 [target.aarch64-unknown-linux-gnu.dependencies]
 openssl = { version = "0.10.64", features = ["vendored"] }
 openssl-sys = { version = "0.9.102", features = ["vendored"] }

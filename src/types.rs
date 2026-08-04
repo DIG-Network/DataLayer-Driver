@@ -3,7 +3,6 @@ use crate::DataStore;
 use chia_bls::{PublicKey, SecretKey};
 pub use chia_protocol::*;
 pub use chia_puzzle_types::{EveProof, LineageProof, Proof};
-use chia_wallet_sdk::coinset::CoinRecord;
 
 pub struct SimulatorPuzzle {
     pub puzzle_hash: Bytes32,
@@ -47,7 +46,9 @@ pub struct UnspentCoinStates {
     pub last_height: u32,
     pub last_header_hash: Bytes32,
 }
-pub fn coin_records_to_states(coin_records: Vec<CoinRecord>) -> Vec<CoinState> {
+pub fn coin_records_to_states(
+    coin_records: Vec<chia_wallet_sdk::coinset::CoinRecord>,
+) -> Vec<CoinState> {
     coin_records
         .into_iter()
         .map(|coin_record| CoinState {
