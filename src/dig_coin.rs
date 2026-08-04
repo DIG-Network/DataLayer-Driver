@@ -1,8 +1,8 @@
 use crate::error::WalletError;
 use crate::wallet::DIG_ASSET_ID;
 use crate::{Bytes32, Coin, Peer};
-use chia::protocol::CoinState;
-use chia::puzzles::cat::CatArgs;
+use chia_protocol::CoinState;
+use chia_puzzle_types::cat::CatArgs;
 use chia_wallet_sdk::driver::{Asset, Cat, Puzzle, SpendContext};
 use chia_wallet_sdk::prelude::{TreeHash, MAINNET_CONSTANTS};
 

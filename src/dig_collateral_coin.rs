@@ -4,8 +4,8 @@ use crate::wallet::DIG_ASSET_ID;
 use crate::{
     Bytes, Bytes32, Coin, CoinSpend, CoinState, LineageProof, P2ParentCoin, Peer, PublicKey,
 };
-use chia::puzzles::Memos;
-use chia::traits::Streamable;
+use chia_puzzle_types::Memos;
+use chia_traits::Streamable;
 use chia_wallet_sdk::driver::{
     Action, Id, Puzzle, Relation, SpendContext, SpendWithConditions, Spends, StandardLayer,
 };

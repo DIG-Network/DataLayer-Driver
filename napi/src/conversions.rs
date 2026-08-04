@@ -1,7 +1,5 @@
-use chia::{
-    bls::{PublicKey, SecretKey, Signature},
-    protocol::{Bytes, Bytes32, Program},
-};
+use chia_bls::{PublicKey, SecretKey, Signature};
+use chia_protocol::{Bytes, Bytes32, Program};
 use napi::bindgen_prelude::*;
 use napi::Result;
 use thiserror::Error;
@@ -384,9 +382,9 @@ impl ToJs<js::SpendBundle> for types::SpendBundle {
     }
 }
 
-impl FromJs<js::NftMetadata> for chia::puzzles::nft::NftMetadata {
+impl FromJs<js::NftMetadata> for chia_puzzle_types::nft::NftMetadata {
     fn from_js(value: js::NftMetadata) -> Result<Self> {
-        Ok(chia::puzzles::nft::NftMetadata {
+        Ok(chia_puzzle_types::nft::NftMetadata {
             data_uris: value.data_uris,
             data_hash: if let Some(hash) = value.data_hash {
                 Some(Bytes32::from_js(hash)?)
@@ -419,7 +417,7 @@ impl FromJs<js::NftMetadata> for chia::puzzles::nft::NftMetadata {
     }
 }
 
-impl ToJs<js::NftMetadata> for chia::puzzles::nft::NftMetadata {
+impl ToJs<js::NftMetadata> for chia_puzzle_types::nft::NftMetadata {
     fn to_js(&self) -> Result<js::NftMetadata> {
         Ok(js::NftMetadata {
             data_uris: self.data_uris.clone(),
