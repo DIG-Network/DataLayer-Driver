@@ -133,7 +133,7 @@ pub fn urls_from_conditions(
 
 #[cfg(test)]
 mod tests {
-    use chia::clvm_utils::tree_hash;
+    use clvm_utils::tree_hash;
     use clvmr::{serde::node_from_bytes, Allocator};
 
     use super::*;

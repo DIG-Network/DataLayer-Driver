@@ -15,9 +15,9 @@
 //! - Fee management utilities
 
 // Re-export core types from dependencies
-pub use chia::bls::{master_to_wallet_unhardened, PublicKey, SecretKey, Signature};
-pub use chia::protocol::{Bytes, Bytes32, Coin, CoinSpend, CoinState, Program, SpendBundle};
-pub use chia::puzzles::{EveProof, LineageProof, Proof};
+pub use chia_bls::{master_to_wallet_unhardened, PublicKey, SecretKey, Signature};
+pub use chia_protocol::{Bytes, Bytes32, Coin, CoinSpend, CoinState, Program, SpendBundle};
+pub use chia_puzzle_types::{EveProof, LineageProof, Proof};
 pub use chia_wallet_sdk::client::Peer;
 pub use chia_wallet_sdk::driver::{
     DataStore, DataStoreInfo, DataStoreMetadata, DelegatedPuzzle, P2ParentCoin,
@@ -57,7 +57,7 @@ use hex_literal::hex;
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
 // Helper functions for common conversions
-use chia::puzzles::{standard::StandardArgs, DeriveSynthetic};
+use chia_puzzle_types::{standard::StandardArgs, DeriveSynthetic};
 // Helper functions for common conversions
 use xch_server_coin::NewXchServerCoin;
 
@@ -126,7 +126,7 @@ pub fn address_to_puzzle_hash(address: &str) -> Result<Bytes32> {
 
 /// Converts hex-encoded spend bundle to coin spends.
 pub fn hex_spend_bundle_to_coin_spends(hex: &str) -> Result<Vec<CoinSpend>> {
-    use chia::traits::Streamable;
+    use chia_traits::Streamable;
     let bytes = hex::decode(hex)?;
     let spend_bundle = SpendBundle::from_bytes(&bytes)?;
     Ok(spend_bundle.coin_spends)
@@ -134,7 +134,7 @@ pub fn hex_spend_bundle_to_coin_spends(hex: &str) -> Result<Vec<CoinSpend>> {
 
 /// Converts a spend bundle to hex encoding.
 pub fn spend_bundle_to_hex(spend_bundle: &SpendBundle) -> Result<String> {
-    use chia::traits::Streamable;
+    use chia_traits::Streamable;
     let bytes = spend_bundle.to_bytes()?;
     Ok(hex::encode(bytes))
 }
@@ -484,7 +484,7 @@ pub mod async_api {
         selected_coins: Vec<Coin>,
         did_string: &str,
         recipient_puzzle_hash: Bytes32,
-        metadata: chia::puzzles::nft::NftMetadata,
+        metadata: chia_puzzle_types::nft::NftMetadata,
         royalty_puzzle_hash: Option<Bytes32>,
         royalty_basis_points: u16,
         fee: u64,
@@ -618,7 +618,7 @@ pub mod async_api {
     pub async fn broadcast_spend_bundle(
         peer: &Peer,
         spend_bundle: SpendBundle,
-    ) -> Result<chia::protocol::TransactionAck> {
+    ) -> Result<chia_protocol::TransactionAck> {
         Ok(wallet::broadcast_spend_bundle(peer, spend_bundle).await?)
     }
 }
@@ -628,12 +628,12 @@ pub mod constants {
     use chia_wallet_sdk::types::{MAINNET_CONSTANTS, TESTNET11_CONSTANTS};
 
     /// Returns the mainnet genesis challenge.
-    pub fn get_mainnet_genesis_challenge() -> chia::protocol::Bytes32 {
+    pub fn get_mainnet_genesis_challenge() -> chia_protocol::Bytes32 {
         MAINNET_CONSTANTS.genesis_challenge
     }
 
     /// Returns the testnet11 genesis challenge.
-    pub fn get_testnet11_genesis_challenge() -> chia::protocol::Bytes32 {
+    pub fn get_testnet11_genesis_challenge() -> chia_protocol::Bytes32 {
         TESTNET11_CONSTANTS.genesis_challenge
     }
 }
@@ -691,7 +691,7 @@ mod examples {
         let selected_coins = select_coins(&unspent_coins.coin_states.iter().map(|cs| cs.coin).collect::<Vec<_>>(), fee + 1).unwrap();
 
         // 5. Create NFT metadata
-        let metadata = chia::puzzles::nft::NftMetadata {
+        let metadata = chia_puzzle_types::nft::NftMetadata {
             data_uris: vec!["https://example.com/nft.png".to_string()],
             metadata_uris: vec!["https://example.com/metadata.json".to_string()],
             ..Default::default()

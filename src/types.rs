@@ -1,8 +1,8 @@
 pub use crate::xch_server_coin::XchServerCoin;
 use crate::DataStore;
-use chia::bls::{PublicKey, SecretKey};
-pub use chia::protocol::*;
-pub use chia::puzzles::{EveProof, LineageProof, Proof};
+use chia_bls::{PublicKey, SecretKey};
+pub use chia_protocol::*;
+pub use chia_puzzle_types::{EveProof, LineageProof, Proof};
 use chia_wallet_sdk::coinset::CoinRecord;
 
 pub struct SimulatorPuzzle {

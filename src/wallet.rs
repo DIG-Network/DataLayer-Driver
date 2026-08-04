@@ -9,20 +9,20 @@ pub use crate::types::{coin_records_to_states, SuccessResponse, XchServerCoin};
 use crate::types::{EveProof, LineageProof, Proof};
 use crate::xch_server_coin::{urls_from_conditions, MirrorArgs, MirrorSolution, NewXchServerCoin};
 use crate::{NetworkType, UnspentCoinStates};
-use chia::bls::{sign, verify, PublicKey, SecretKey, Signature};
-use chia::clvm_traits::{clvm_tuple, FromClvm, ToClvm};
-use chia::clvm_utils::tree_hash;
-use chia::consensus::consensus_constants::ConsensusConstants;
-use chia::consensus::flags::{DONT_VALIDATE_SIGNATURE, MEMPOOL_MODE};
-use chia::consensus::owned_conditions::OwnedSpendBundleConditions;
-use chia::consensus::run_block_generator::run_block_generator;
-use chia::consensus::solution_generator::solution_generator;
-use chia::protocol::{
+use chia_bls::{sign, verify, PublicKey, SecretKey, Signature};
+use clvm_traits::{clvm_tuple, FromClvm, ToClvm};
+use clvm_utils::tree_hash;
+use chia_consensus::consensus_constants::ConsensusConstants;
+use chia_consensus::flags::{DONT_VALIDATE_SIGNATURE, MEMPOOL_MODE};
+use chia_consensus::owned_conditions::OwnedSpendBundleConditions;
+use chia_consensus::run_block_generator::run_block_generator;
+use chia_consensus::solution_generator::solution_generator;
+use chia_protocol::{
     Bytes, Bytes32, Coin, CoinSpend, CoinState, CoinStateFilters, RejectHeaderRequest,
     RequestBlockHeader, RequestFeeEstimates, RespondBlockHeader, RespondFeeEstimates, SpendBundle,
     TransactionAck,
 };
-use chia::puzzles::{
+use chia_puzzle_types::{
     nft::NftMetadata,
     standard::{StandardArgs, StandardSolution},
     DeriveSynthetic,
@@ -1125,7 +1125,7 @@ pub fn get_cost(coin_spends: Vec<CoinSpend>) -> Result<u64, WalletError> {
             .into_iter()
             .map(|cs| (cs.coin, cs.puzzle_reveal, cs.solution)),
     )
-    .map_err(WalletError::Io)?;
+    ?;
 
     let conds = run_block_generator::<&[u8], _>(
         &mut alloc,
@@ -1246,11 +1246,11 @@ pub async fn mint_nft(
 
     // Convert DID proof
     let did_proof = match did_proof {
-        chia::puzzles::Proof::Eve(eve) => Proof::Eve(EveProof {
+        chia_puzzle_types::Proof::Eve(eve) => Proof::Eve(EveProof {
             parent_parent_coin_info: eve.parent_parent_coin_info,
             parent_amount: eve.parent_amount,
         }),
-        chia::puzzles::Proof::Lineage(lineage) => Proof::Lineage(LineageProof {
+        chia_puzzle_types::Proof::Lineage(lineage) => Proof::Lineage(LineageProof {
             parent_parent_coin_info: lineage.parent_parent_coin_info,
             parent_inner_puzzle_hash: lineage.parent_inner_puzzle_hash,
             parent_amount: lineage.parent_amount,
@@ -1332,7 +1332,7 @@ pub async fn generate_did_proof(
     peer: &Peer,
     did_coin: Coin,
     network: TargetNetwork,
-) -> Result<(chia::puzzles::Proof, Coin), WalletError> {
+) -> Result<(chia_puzzle_types::Proof, Coin), WalletError> {
     let proof = generate_did_proof_from_chain(peer, did_coin, network).await?;
     Ok((proof, did_coin))
 }
@@ -1350,14 +1350,14 @@ pub fn generate_did_proof_manual(
     did_coin: Coin,
     parent_coin: Option<Coin>,
     parent_inner_puzzle_hash: Option<Bytes32>,
-) -> Result<chia::puzzles::Proof, WalletError> {
+) -> Result<chia_puzzle_types::Proof, WalletError> {
     match parent_coin {
         // Eve proof - first spend from launcher
         None => {
             // For eve proof, we need the launcher coin info
             // The parent_parent_coin_info is the coin that created the launcher
             // The parent_amount is the launcher coin amount (typically 1 mojo)
-            Ok(chia::puzzles::Proof::Eve(chia::puzzles::EveProof {
+            Ok(chia_puzzle_types::Proof::Eve(chia_puzzle_types::EveProof {
                 parent_parent_coin_info: did_coin.parent_coin_info,
                 parent_amount: 1, // Launcher coins are typically 1 mojo
             }))
@@ -1368,7 +1368,7 @@ pub fn generate_did_proof_manual(
                 "Parent inner puzzle hash is required".to_string(),
             ))?; // Need inner puzzle hash for lineage proof
 
-            Ok(chia::puzzles::Proof::Lineage(chia::puzzles::LineageProof {
+            Ok(chia_puzzle_types::Proof::Lineage(chia_puzzle_types::LineageProof {
                 parent_parent_coin_info: parent.parent_coin_info,
                 parent_inner_puzzle_hash,
                 parent_amount: parent.amount,
@@ -1390,7 +1390,7 @@ pub async fn generate_did_proof_from_chain(
     peer: &Peer,
     did_coin: Coin,
     network: TargetNetwork,
-) -> Result<chia::puzzles::Proof, WalletError> {
+) -> Result<chia_puzzle_types::Proof, WalletError> {
     // Get the parent coin state
     let parent_coin_states = peer
         .request_coin_state(
@@ -1411,7 +1411,7 @@ pub async fn generate_did_proof_from_chain(
     // Check if parent is a launcher (puzzle hash matches singleton launcher)
     if parent_coin_state.coin.puzzle_hash == SINGLETON_LAUNCHER_HASH.into() {
         // This is an eve proof - first spend from launcher
-        return Ok(chia::puzzles::Proof::Eve(chia::puzzles::EveProof {
+        return Ok(chia_puzzle_types::Proof::Eve(chia_puzzle_types::EveProof {
             parent_parent_coin_info: parent_coin_state.coin.parent_coin_info,
             parent_amount: parent_coin_state.coin.amount,
         }));
@@ -1431,7 +1431,7 @@ pub async fn generate_did_proof_from_chain(
 
     // For now, create a basic lineage proof
     // This is a simplified approach - in production you'd want to properly parse the parent DID
-    Ok(chia::puzzles::Proof::Lineage(chia::puzzles::LineageProof {
+    Ok(chia_puzzle_types::Proof::Lineage(chia_puzzle_types::LineageProof {
         parent_parent_coin_info: parent_coin_state.coin.parent_coin_info,
         parent_inner_puzzle_hash: Bytes32::default(), // Would need to parse from parent spend
         parent_amount: parent_coin_state.coin.amount,
@@ -1518,7 +1518,7 @@ pub async fn resolve_did_string_and_generate_proof(
     peer: &Peer,
     did_string: &str,
     network: TargetNetwork,
-) -> Result<(chia::puzzles::Proof, Coin), WalletError> {
+) -> Result<(chia_puzzle_types::Proof, Coin), WalletError> {
     // Parse DID string to extract launcher ID
     let parts: Vec<&str> = did_string.split(':').collect();
 

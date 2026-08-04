@@ -15,9 +15,9 @@ use datalayer_driver::{
     Signature as RustSignature, SpendBundle as RustSpendBundle,
 };
 
-use chia::protocol::{CoinStateUpdate, NewPeakWallet, ProtocolMessageTypes};
-use chia::puzzles::{standard::StandardArgs, DeriveSynthetic};
-use chia::traits::Streamable;
+use chia_protocol::{CoinStateUpdate, NewPeakWallet, ProtocolMessageTypes};
+use chia_puzzle_types::{standard::StandardArgs, DeriveSynthetic};
+use chia_traits::Streamable;
 use chia_wallet_sdk::client::{
     connect_peer, create_native_tls_connector, load_ssl_cert, Connector, PeerOptions,
 };
@@ -1757,7 +1757,7 @@ pub async fn mint_nft(
         .collect::<Result<Vec<RustCoin>>>()
         .map_err(crate::js::err)?;
     let recipient_puzzle_hash = RustBytes32::from_js(recipient_puzzle_hash)?;
-    let metadata = chia::puzzles::nft::NftMetadata::from_js(metadata)?;
+    let metadata = chia_puzzle_types::nft::NftMetadata::from_js(metadata)?;
     let royalty_puzzle_hash = if let Some(hash) = royalty_puzzle_hash {
         Some(RustBytes32::from_js(hash)?)
     } else {

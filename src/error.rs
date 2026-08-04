@@ -1,4 +1,4 @@
-use chia::consensus::validation_error::ValidationErr;
+use chia_consensus::validation_error::ValidationErr;
 use chia_wallet_sdk::client::ClientError;
 use chia_wallet_sdk::driver::DriverError;
 use thiserror::Error;
@@ -33,13 +33,13 @@ pub enum WalletError {
     Clvm,
 
     #[error("ToClvm error: {0}")]
-    ToClvm(#[from] chia::clvm_traits::ToClvmError),
+    ToClvm(#[from] clvm_traits::ToClvmError),
 
     #[error("Permission error: puzzle can't perform this action")]
     Permission,
 
-    #[error("Io error: {0}")]
-    Io(std::io::Error),
+    #[error("Consensus error: {0:?}")]
+    Consensus(#[from] chia_consensus::error::Error),
 
     #[error("Validation error: {0}")]
     Validation(#[from] ValidationErr),
