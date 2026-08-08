@@ -1,13 +1,20 @@
 #![allow(clippy::result_large_err)]
 
 use std::collections::HashMap;
+#[cfg(feature = "native")]
 use std::time::{SystemTime, UNIX_EPOCH};
 
 // Import proof types from our own crate's rust module
 use crate::error::WalletError;
-pub use crate::types::{coin_records_to_states, SuccessResponse, XchServerCoin};
+#[cfg(feature = "native")]
+pub use crate::types::coin_records_to_states;
+#[cfg(feature = "native")]
 use crate::types::{EveProof, LineageProof, Proof};
-use crate::xch_server_coin::{urls_from_conditions, MirrorArgs, MirrorSolution, NewXchServerCoin};
+pub use crate::types::{SuccessResponse, XchServerCoin};
+#[cfg(feature = "native")]
+use crate::xch_server_coin::{urls_from_conditions, MirrorSolution};
+use crate::xch_server_coin::{MirrorArgs, NewXchServerCoin};
+#[cfg(feature = "native")]
 use crate::{NetworkType, UnspentCoinStates};
 use chia_bls::{sign, verify, PublicKey, SecretKey, Signature};
 use chia_consensus::consensus_constants::ConsensusConstants;
@@ -15,31 +22,38 @@ use chia_consensus::flags::{DONT_VALIDATE_SIGNATURE, MEMPOOL_MODE};
 use chia_consensus::owned_conditions::OwnedSpendBundleConditions;
 use chia_consensus::run_block_generator::run_block_generator;
 use chia_consensus::solution_generator::solution_generator;
+use chia_protocol::{Bytes, Bytes32, Coin, CoinSpend};
+#[cfg(feature = "native")]
+use chia_protocol::{CoinState, SpendBundle};
+#[cfg(feature = "native")]
 use chia_protocol::{
-    Bytes, Bytes32, Coin, CoinSpend, CoinState, CoinStateFilters, RejectHeaderRequest,
-    RequestBlockHeader, RequestFeeEstimates, RespondBlockHeader, RespondFeeEstimates, SpendBundle,
-    TransactionAck,
+    CoinStateFilters, RejectHeaderRequest, RequestBlockHeader, RequestFeeEstimates,
+    RespondBlockHeader, RespondFeeEstimates, TransactionAck,
 };
-use chia_puzzle_types::{
-    nft::NftMetadata,
-    standard::{StandardArgs, StandardSolution},
-    DeriveSynthetic,
-};
+#[cfg(feature = "native")]
+use chia_puzzle_types::nft::NftMetadata;
+#[cfg(feature = "native")]
+use chia_puzzle_types::standard::StandardSolution;
+use chia_puzzle_types::{standard::StandardArgs, DeriveSynthetic};
 use chia_puzzles::SINGLETON_LAUNCHER_HASH;
-use chia_wallet_sdk::client::Peer;
-use chia_wallet_sdk::driver::{
-    get_merkle_tree, DataStore, DataStoreMetadata, DelegatedPuzzle, Did, DidInfo, DriverError,
-    HashedPtr, IntermediateLauncher, Launcher, Layer, NftMint, OracleLayer, SpendContext,
-    SpendWithConditions, StandardLayer, WriterLayer,
+use chia_sdk_driver::{
+    get_merkle_tree, DataStore, DataStoreMetadata, DelegatedPuzzle, DriverError, Launcher, Layer,
+    OracleLayer, SpendContext, SpendWithConditions, StandardLayer, WriterLayer,
 };
-use chia_wallet_sdk::signer::{AggSigConstants, RequiredSignature, SignerError};
-use chia_wallet_sdk::types::{
+#[cfg(feature = "native")]
+use chia_sdk_driver::{Did, DidInfo, HashedPtr, IntermediateLauncher, NftMint};
+use chia_sdk_signer::{AggSigConstants, RequiredSignature, SignerError};
+use chia_sdk_types::{
     announcement_id,
     conditions::{CreateCoin, MeltSingleton, Memos, UpdateDataStoreMerkleRoot},
     Condition, Conditions, MAINNET_CONSTANTS, TESTNET11_CONSTANTS,
 };
-use chia_wallet_sdk::utils::{self, CoinSelectionError};
-use clvm_traits::{clvm_tuple, FromClvm, ToClvm};
+use chia_sdk_utils::{self as utils, CoinSelectionError};
+#[cfg(feature = "native")]
+use chia_wallet_sdk::client::Peer;
+#[cfg(feature = "native")]
+use clvm_traits::FromClvm;
+use clvm_traits::{clvm_tuple, ToClvm};
 use clvm_utils::tree_hash;
 use clvmr::Allocator;
 use hex_literal::hex;
@@ -57,6 +71,7 @@ pub const DIG_ASSET_ID: Bytes32 = Bytes32::new(hex!(
 
 pub const MAX_CLVM_COST: u64 = 11_000_000_000;
 
+#[cfg(feature = "native")]
 pub async fn get_unspent_coin_states_by_hint(
     peer: &Peer,
     hint: Bytes32,
@@ -69,6 +84,7 @@ pub async fn get_unspent_coin_states_by_hint(
     get_unspent_coin_states(peer, hint, None, header_hash, true).await
 }
 
+#[cfg(feature = "native")]
 pub async fn get_unspent_coin_states(
     peer: &Peer,
     puzzle_hash: Bytes32,
@@ -247,6 +263,7 @@ pub fn create_server_coin(
     })
 }
 
+#[cfg(feature = "native")]
 pub async fn spend_xch_server_coins(
     peer: &Peer,
     synthetic_key: PublicKey,
@@ -338,6 +355,7 @@ pub async fn spend_xch_server_coins(
     Ok(ctx.take())
 }
 
+#[cfg(feature = "native")]
 pub async fn fetch_xch_server_coin(
     peer: &Peer,
     coin_state: CoinState,
@@ -479,6 +497,7 @@ pub struct SyncStoreResponse {
     pub root_hash_history: Option<Vec<(Bytes32, u64)>>,
 }
 
+#[cfg(feature = "native")]
 pub async fn sync_store(
     peer: &Peer,
     store: &DataStore,
@@ -577,6 +596,7 @@ pub async fn sync_store(
     })
 }
 
+#[cfg(feature = "native")]
 pub async fn sync_store_using_launcher_id(
     peer: &Peer,
     launcher_id: Bytes32,
@@ -658,6 +678,7 @@ pub async fn sync_store_using_launcher_id(
     })
 }
 
+#[cfg(feature = "native")]
 pub async fn get_store_creation_height(
     peer: &Peer,
     launcher_id: Bytes32,
@@ -1025,6 +1046,7 @@ pub fn sign_coin_spends(
     Ok(sig)
 }
 
+#[cfg(feature = "native")]
 pub async fn broadcast_spend_bundle(
     peer: &Peer,
     spend_bundle: SpendBundle,
@@ -1034,6 +1056,7 @@ pub async fn broadcast_spend_bundle(
         .map_err(WalletError::Client)
 }
 
+#[cfg(feature = "native")]
 pub async fn get_header_hash(peer: &Peer, height: u32) -> Result<Bytes32, WalletError> {
     let resp: Result<RespondBlockHeader, RejectHeaderRequest> = peer
         .request_fallible(RequestBlockHeader { height })
@@ -1044,6 +1067,7 @@ pub async fn get_header_hash(peer: &Peer, height: u32) -> Result<Bytes32, Wallet
         .map(|resp| resp.header_block.header_hash())
 }
 
+#[cfg(feature = "native")]
 pub async fn get_fee_estimate(peer: &Peer, target_time_seconds: u64) -> Result<u64, WalletError> {
     let target_time_seconds = target_time_seconds
         + SystemTime::now()
@@ -1076,6 +1100,7 @@ pub async fn get_fee_estimate(peer: &Peer, target_time_seconds: u64) -> Result<u
     ))
 }
 
+#[cfg(feature = "native")]
 pub async fn is_coin_spent(
     peer: &Peer,
     coin_id: Bytes32,
@@ -1148,6 +1173,7 @@ pub struct PossibleLaunchersResponse {
     pub last_header_hash: Bytes32,
 }
 
+#[cfg(feature = "native")]
 pub async fn look_up_possible_launchers(
     peer: &Peer,
     previous_height: Option<u32>,
@@ -1179,6 +1205,7 @@ pub async fn look_up_possible_launchers(
     })
 }
 
+#[cfg(feature = "native")]
 pub async fn subscribe_to_coin_states(
     peer: &Peer,
     coin_id: Bytes32,
@@ -1198,6 +1225,7 @@ pub async fn subscribe_to_coin_states(
     Err(WalletError::UnknownCoin)
 }
 
+#[cfg(feature = "native")]
 pub async fn unsubscribe_from_coin_states(
     peer: &Peer,
     coin_id: Bytes32,
@@ -1225,6 +1253,7 @@ pub async fn unsubscribe_from_coin_states(
 ///
 /// # Returns
 /// A vector of coin spends that mint the NFT
+#[cfg(feature = "native")]
 #[allow(clippy::too_many_arguments)]
 pub async fn mint_nft(
     peer: &Peer,
@@ -1327,6 +1356,7 @@ pub async fn mint_nft(
 ///
 /// # Returns
 /// A tuple containing the DID proof and the DID coin
+#[cfg(feature = "native")]
 pub async fn generate_did_proof(
     peer: &Peer,
     did_coin: Coin,
@@ -1387,6 +1417,7 @@ pub fn generate_did_proof_manual(
 ///
 /// # Returns
 /// A DID proof that can be used to spend the DID coin
+#[cfg(feature = "native")]
 pub async fn generate_did_proof_from_chain(
     peer: &Peer,
     did_coin: Coin,
@@ -1517,6 +1548,7 @@ pub fn create_simple_did(
 ///
 /// # Returns
 /// A tuple containing the DID proof and the current DID coin
+#[cfg(feature = "native")]
 pub async fn resolve_did_string_and_generate_proof(
     peer: &Peer,
     did_string: &str,
@@ -1532,7 +1564,7 @@ pub async fn resolve_did_string_and_generate_proof(
     let bech32_part = parts[2];
 
     // Decode the bech32 address to get the launcher ID
-    use chia_wallet_sdk::utils::Address;
+    use chia_sdk_utils::Address;
     let address = Address::decode(bech32_part)
         .map_err(|_| WalletError::Parse("Cannot decode address".to_string()))?;
 

@@ -46,6 +46,7 @@ pub struct UnspentCoinStates {
     pub last_height: u32,
     pub last_header_hash: Bytes32,
 }
+#[cfg(feature = "native")]
 pub fn coin_records_to_states(
     coin_records: Vec<chia_wallet_sdk::coinset::CoinRecord>,
 ) -> Vec<CoinState> {

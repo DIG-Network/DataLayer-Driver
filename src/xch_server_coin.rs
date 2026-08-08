@@ -1,8 +1,12 @@
 use crate::CoinSpend;
-use chia_wallet_sdk::prelude::{
-    Allocator, Bytes, Bytes32, Coin, Condition, CreateCoin, CurriedProgram, FromClvm, Memos, Mod,
-    ToClvm, ToTreeHash, TreeHash,
+use chia_protocol::{Bytes, Bytes32, Coin};
+use chia_sdk_types::{
+    conditions::{CreateCoin, Memos},
+    Condition, Mod,
 };
+use clvm_traits::{FromClvm, ToClvm};
+use clvm_utils::{CurriedProgram, ToTreeHash, TreeHash};
+use clvmr::Allocator;
 use hex_literal::hex;
 use num_bigint::BigInt;
 use std::borrow::Cow;

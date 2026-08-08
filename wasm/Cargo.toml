@@ -1,0 +1,36 @@
+[package]
+name = "datalayer-driver-wasm"
+version = "4.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+description = "WebAssembly bindings for the Chia DataLayer driver (offline DIGStore spend-bundle construction)."
+repository = "https://github.com/DIG-Network/DataLayer-Driver"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["console-panic-hook"]
+console-panic-hook = ["dep:console_error_panic_hook"]
+
+[dependencies]
+datalayer-driver = { path = "..", default-features = false }
+wasm-bindgen = "0.2"
+js-sys = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_bytes = "0.11"
+serde-wasm-bindgen = "0.6"
+console_error_panic_hook = { version = "0.1", optional = true }
+hex = "0.4"
+# Two getrandom majors reach the wasm build: 0.2 (via chialisp) needs the `js`
+# feature, 0.3 (via chia-sdk-driver) needs `wasm_js` plus the matching
+# `getrandom_backend` cfg set in .cargo/config.toml.
+getrandom = { version = "0.2", features = ["js"] }
+getrandom_v03 = { package = "getrandom", version = "0.3", features = ["wasm_js"] }
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3"
+
+[package.metadata.cargo-machete]
+ignored = ["getrandom", "getrandom_v03", "js-sys"]

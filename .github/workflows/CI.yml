@@ -146,6 +146,40 @@ jobs:
           path: napi/${{ env.APP_NAME }}.*.node
           if-no-files-found: error
 
+  build-wasm:
+    name: Build & test WASM bindings
+    needs: rust-checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install Rust + wasm target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: wasm32-unknown-unknown
+      - name: Install clang/lld (blst needs a C/Clang toolchain for wasm32)
+        run: sudo apt-get update && sudo apt-get install -y clang lld
+      - name: Install wasm-pack
+        uses: jetli/wasm-pack-action@v0.4.0
+        with:
+          version: latest
+      - name: Build NAPI (needed by the parity test)
+        run: cd napi && npm install && npm run build
+      - name: Build WASM nodejs target and run parity test
+        run: cd wasm && npm install && npm run build:node && npm test
+      - name: Build WASM bundler artifact (published package)
+        run: cd wasm && npm run build:bundler
+      - name: Upload wasm pkg
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-pkg
+          path: wasm/pkg
+          if-no-files-found: error
+
   test-macOS-windows-binding:
     name: Test bindings on ${{ matrix.settings.target }} - node@${{ matrix.node }}
     needs:
@@ -310,6 +344,38 @@ jobs:
             npm publish --tag next --access public
           else
             echo "Not a release, skipping npm publish"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-wasm-npm:
+    name: Publish WASM to NPM
+    runs-on: ubuntu-latest
+    needs:
+      - build-wasm
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Download wasm pkg
+        uses: actions/download-artifact@v4
+        with:
+          name: wasm-pkg
+          path: wasm/pkg
+      - name: Publish to NPM (on version-tag commit)
+        run: |
+          npm config set provenance true
+          if git log -1 --pretty=%B | grep -qE "^[0-9]+\.[0-9]+\.[0-9]+$"; then
+            echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" >> ~/.npmrc
+            cd wasm/pkg && npm publish --access public
+          elif git log -1 --pretty=%B | grep -qE "^[0-9]+\.[0-9]+\.[0-9]+"; then
+            echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" >> ~/.npmrc
+            cd wasm/pkg && npm publish --tag next --access public
+          else
+            echo "Not a release, skipping wasm npm publish"
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

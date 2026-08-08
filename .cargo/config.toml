@@ -1,2 +1,7 @@
 [target.x86_64-pc-windows-msvc]
 rustflags = ["-C", "target-feature=+crt-static"]
+# getrandom 0.3 (pulled in via chia-sdk-driver) refuses to build for
+# wasm32-unknown-unknown unless a backend is named explicitly. The browser
+# backend is selected by a cfg flag, not by a Cargo feature alone.
+[target.wasm32-unknown-unknown]
+rustflags = ['--cfg', 'getrandom_backend="wasm_js"']
