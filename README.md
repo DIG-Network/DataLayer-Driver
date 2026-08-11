@@ -4,6 +4,8 @@ Native Chia DataLayer Driver for storing and retrieving data in Chia blockchain.
 
 This project provides both Rust library APIs and Node.js bindings for interacting with Chia's DataLayer.
 
+A WebAssembly build is also available as [`@dignetwork/datalayer-driver-wasm`](./wasm/README.md) for browser and bundler environments (webpack, Vite, Next.js, esbuild). The WASM package mirrors the offline subset of the NAPI interface — no networking, no `Peer`/`Tls` — making it ideal for building and signing DIGStore spend bundles client-side without a full node. See [`wasm/README.md`](./wasm/README.md) for installation, usage, and a worked example.
+
 ## Installation
 
 ### As a Rust Crate

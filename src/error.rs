@@ -1,10 +1,12 @@
 use chia_consensus::validation_error::ValidationErr;
+use chia_sdk_driver::DriverError;
+#[cfg(feature = "native")]
 use chia_wallet_sdk::client::ClientError;
-use chia_wallet_sdk::driver::DriverError;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum WalletError {
+    #[cfg(feature = "native")]
     #[error("{0:?}")]
     Client(#[from] ClientError),
 

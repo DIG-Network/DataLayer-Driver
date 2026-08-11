@@ -18,18 +18,22 @@
 pub use chia_bls::{master_to_wallet_unhardened, PublicKey, SecretKey, Signature};
 pub use chia_protocol::{Bytes, Bytes32, Coin, CoinSpend, CoinState, Program, SpendBundle};
 pub use chia_puzzle_types::{EveProof, LineageProof, Proof};
-pub use chia_wallet_sdk::client::Peer;
-pub use chia_wallet_sdk::driver::{
+pub use chia_sdk_driver::{
     DataStore, DataStoreInfo, DataStoreMetadata, DelegatedPuzzle, P2ParentCoin,
 };
-pub use chia_wallet_sdk::utils::Address;
+pub use chia_sdk_utils::Address;
+#[cfg(feature = "native")]
+pub use chia_wallet_sdk::client::Peer;
 
 // Re-export async_api and constants modules at the top level for convenience
+#[cfg(feature = "native")]
 pub use async_api::{connect_peer, connect_random, create_tls_connector, NetworkType};
 pub use constants::{get_mainnet_genesis_challenge, get_testnet11_genesis_challenge};
 
 // Internal modules
+#[cfg(feature = "native")]
 mod dig_coin;
+#[cfg(feature = "native")]
 mod dig_collateral_coin;
 mod error;
 pub mod types;
@@ -41,14 +45,18 @@ pub use types::{
     BlsPair, SimulatorPuzzle, SuccessResponse, UnspentCoinStates, UnspentCoinsResponse,
 };
 pub use wallet::{
-    create_simple_did, generate_did_proof, generate_did_proof_from_chain,
-    generate_did_proof_manual, get_fee_estimate, get_header_hash, get_store_creation_height,
-    get_unspent_coin_states, is_coin_spent, look_up_possible_launchers, mint_nft,
-    spend_xch_server_coins, subscribe_to_coin_states, sync_store, sync_store_using_launcher_id,
-    unsubscribe_from_coin_states, verify_signature, DataStoreInnerSpend, PossibleLaunchersResponse,
+    create_simple_did, generate_did_proof_manual, verify_signature, DataStoreInnerSpend,
     SyncStoreResponse, TargetNetwork,
 };
+#[cfg(feature = "native")]
+pub use wallet::{
+    generate_did_proof, generate_did_proof_from_chain, get_fee_estimate, get_header_hash,
+    get_store_creation_height, get_unspent_coin_states, is_coin_spent, look_up_possible_launchers,
+    mint_nft, spend_xch_server_coins, subscribe_to_coin_states, sync_store,
+    sync_store_using_launcher_id, unsubscribe_from_coin_states, PossibleLaunchersResponse,
+};
 pub use xch_server_coin::{morph_launcher_id, XchServerCoin};
+#[cfg(feature = "native")]
 pub use {dig_coin::DigCoin, dig_collateral_coin::DigCollateralCoin};
 
 use hex_literal::hex;
@@ -114,13 +122,13 @@ pub fn get_coin_id(coin: &Coin) -> Bytes32 {
 
 /// Converts a puzzle hash to an address by encoding it using bech32m.
 pub fn puzzle_hash_to_address(puzzle_hash: Bytes32, prefix: &str) -> Result<String> {
-    use chia_wallet_sdk::utils::Address;
+    use chia_sdk_utils::Address;
     Ok(Address::new(puzzle_hash, prefix.to_string()).encode()?)
 }
 
 /// Converts an address to a puzzle hash using bech32m.
 pub fn address_to_puzzle_hash(address: &str) -> Result<Bytes32> {
-    use chia_wallet_sdk::utils::Address;
+    use chia_sdk_utils::Address;
     Ok(Address::decode(address)?.puzzle_hash)
 }
 
@@ -337,6 +345,7 @@ pub fn create_server_coin(
 }
 
 /// Async functions for blockchain interaction (Rust API versions)
+#[cfg(feature = "native")]
 pub mod async_api {
     use super::*;
     use futures_util::stream::{FuturesUnordered, StreamExt};
@@ -625,7 +634,7 @@ pub mod async_api {
 
 /// Constants for different networks
 pub mod constants {
-    use chia_wallet_sdk::types::{MAINNET_CONSTANTS, TESTNET11_CONSTANTS};
+    use chia_sdk_types::{MAINNET_CONSTANTS, TESTNET11_CONSTANTS};
 
     /// Returns the mainnet genesis challenge.
     pub fn get_mainnet_genesis_challenge() -> chia_protocol::Bytes32 {
@@ -639,7 +648,7 @@ pub mod constants {
 }
 
 /// Example usage of the Rust API
-#[cfg(test)]
+#[cfg(all(test, feature = "native"))]
 mod examples {
     use super::*;
 

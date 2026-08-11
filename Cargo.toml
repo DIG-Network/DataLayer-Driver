@@ -1,17 +1,17 @@
 [workspace]
 resolver = "2"
-members = [".", "napi"]
+members = [".", "napi", "wasm"]
 
 [package]
-edition = "2021"
 name = "datalayer-driver"
-version = "4.0.0"
-license = "MIT"
+version = "4.1.0"
+edition = "2021"
 authors = ["yakuhito <y@kuhi.to>", "William Wills <wwills2@protonmail.com>"]
-homepage = "https://github.com/DIG-Network/DataLayer-Driver"
-repository = "https://github.com/DIG-Network/DataLayer-Driver"
 description = "Native Chia DataLayer Driver for storing and retrieving data in Chia blockchain"
+license = "MIT"
+repository = "https://github.com/DIG-Network/DataLayer-Driver"
 readme = "README.md"
+homepage = "https://github.com/DIG-Network/DataLayer-Driver"
 keywords = ["chia", "blockchain", "datalayer", "storage", "web3"]
 categories = ["cryptography::cryptocurrencies", "web-programming"]
 
@@ -25,8 +25,22 @@ chia-puzzles = "0.20.3"
 chia-puzzle-types = "0.36.1"
 thiserror = "1.0.61"
 clvmr = "0.16.2"
-tokio = "1.39.3"
-chia-wallet-sdk = { version = "0.34.0", features = ["chip-0035", "native-tls", "peer-simulator", "action-layer"] }
+
+# Native-only: the async peer client and its tokio runtime cannot build for
+# wasm32. Both are optional and pulled in by the `native` feature.
+tokio = { version = "1.39.3", optional = true }
+chia-wallet-sdk = { version = "0.34.0", default-features = false, features = [
+    "chip-0035",
+    "action-layer",
+], optional = true }
+
+# The wasm-safe halves of the wallet SDK, depended on directly so that the
+# wasm build never reaches the client/coinset/test crates re-exported by the
+# `chia-wallet-sdk` facade.
+chia-sdk-driver = { version = "0.34.0", features = ["chip-0035", "action-layer"] }
+chia-sdk-signer = "0.34.0"
+chia-sdk-types = { version = "0.34.0", features = ["chip-0035", "action-layer"] }
+chia-sdk-utils = "0.34.0"
 hex-literal = "0.4.1"
 num-bigint = "0.4.6"
 hex = "0.4.3"
@@ -37,6 +51,15 @@ indexmap = "2.11.4"
 
 [dev-dependencies]
 anyhow = "1.0.86"
+
+[features]
+default = ["native"]
+native = [
+    "dep:tokio",
+    "dep:chia-wallet-sdk",
+    "chia-wallet-sdk/native-tls",
+    "chia-wallet-sdk/peer-simulator",
+]
 
 [target.aarch64-unknown-linux-gnu.dependencies]
 openssl = { version = "0.10.64", features = ["vendored"] }

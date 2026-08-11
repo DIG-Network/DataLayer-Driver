@@ -1,0 +1,14 @@
+{
+  "name": "@dignetwork/datalayer-driver-wasm-dev",
+  "version": "4.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:bundler": "wasm-pack build . --target bundler --release --no-opt && node scripts/patch-pkg.mjs",
+    "build:node": "wasm-pack build . --target nodejs --dev --out-dir pkg-node",
+    "test": "node tests/parity.mjs"
+  },
+  "devDependencies": {
+    "@dignetwork/datalayer-driver": "file:../napi"
+  }
+}
