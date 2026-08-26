@@ -297,8 +297,14 @@ jobs:
       - name: List packages
         run: ls -R ./napi/npm
         shell: bash
+      # PINNED to the 11.x line, NOT @latest. Trusted publishing needs npm >= 11.5.1, but npm 12
+      # requires Node ^22.22.2 while this job sets up Node 20 — so `@latest` started failing the
+      # moment npm 12 shipped, with EBADENGINE, and took the 5.0.0 npm publish down with it while
+      # the crates.io half succeeded. npm 11.6.2 declares `^20.17.0 || >=22.9.0`, so it satisfies
+      # both this runner and trusted publishing. Raise this pin only together with the Node version
+      # in the `Setup node` step above.
       - name: Upgrade npm for trusted publishing
-        run: npm install -g npm@latest
+        run: npm install -g npm@11
       - name: Publish to NPM
         run: |
           cd napi
@@ -350,8 +356,22 @@ jobs:
         run: |
           if git log -1 --pretty=%B | grep "^[0-9]\+\.[0-9]\+\.[0-9]\+$";
           then
-            cargo login $CARGO_REGISTRY_TOKEN
-            cargo publish --no-verify --allow-dirty
+            # Skip a version already on the index, so RE-triggering a release is not red.
+            # This matters because the two registries can diverge: on 5.0.0 the crates.io half
+            # succeeded and the npm half failed on an unrelated engine error, and the only way to
+            # retry npm is another release commit — which would otherwise fail here on
+            # "crate version is already uploaded" and hide the npm result behind a red crates job.
+            # The User-Agent header is REQUIRED; without it crates.io answers in a way that reads
+            # exactly like "not published", which would turn this guard into a silent skip.
+            VERSION=$(git log -1 --pretty=%B | grep -m1 "^[0-9]\+\.[0-9]\+\.[0-9]\+$")
+            if curl -sH 'User-Agent: dig-datalayer-driver-ci' \
+                 https://index.crates.io/da/ta/datalayer-driver \
+                 | grep -q "\"vers\":\"${VERSION}\""; then
+              echo "datalayer-driver ${VERSION} is already on crates.io — skipping publish"
+            else
+              cargo login $CARGO_REGISTRY_TOKEN
+              cargo publish --no-verify --allow-dirty
+            fi
           else
             echo "Not a release, skipping crates.io publish"
           fi
