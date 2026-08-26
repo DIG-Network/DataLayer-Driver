@@ -789,7 +789,7 @@ pub fn update_store_metadata(
 ) -> Result<SuccessResponse, WalletError> {
     let ctx = &mut SpendContext::new();
 
-    let new_metadata = DataStoreMetadata {
+    let new_metadata = DatastoreMetadata {
         root_hash: new_root_hash,
         label: new_label,
         description: new_description,
@@ -906,7 +906,7 @@ pub fn oracle_spend(
     let parent_delegated_puzzles = datastore.info.delegated_puzzles.clone();
     let new_spend = datastore.spend(ctx, inner_datastore_spend)?;
 
-    let new_datastore = DataStore::from_spend(ctx, &new_spend, &parent_delegated_puzzles)?
+    let new_datastore = Datastore::from_spend(ctx, &new_spend, &parent_delegated_puzzles)?
         .ok_or(WalletError::Parse("Store from spend is None".to_string()))?;
     ctx.insert(new_spend.clone());
 
