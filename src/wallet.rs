@@ -28,14 +28,14 @@ use chia_puzzle_types::{
 use chia_puzzles::SINGLETON_LAUNCHER_HASH;
 use chia_wallet_sdk::client::Peer;
 use chia_wallet_sdk::driver::{
-    get_merkle_tree, DataStore, DataStoreMetadata, DelegatedPuzzle, Did, DidInfo, DriverError,
+    get_merkle_tree, Datastore, DatastoreMetadata, DelegatedPuzzle, Did, DidInfo, DriverError,
     HashedPtr, IntermediateLauncher, Launcher, Layer, NftMint, OracleLayer, SpendContext,
     SpendWithConditions, StandardLayer, WriterLayer,
 };
 use chia_wallet_sdk::signer::{AggSigConstants, RequiredSignature, SignerError};
 use chia_wallet_sdk::types::{
     announcement_id,
-    conditions::{CreateCoin, MeltSingleton, Memos, UpdateDataStoreMerkleRoot},
+    conditions::{CreateCoin, MeltSingleton, Memos, UpdateDatastoreMerkleRoot},
     Condition, Conditions, MAINNET_CONSTANTS, TESTNET11_CONSTANTS,
 };
 use chia_wallet_sdk::utils::{self, CoinSelectionError};
@@ -420,7 +420,7 @@ pub fn mint_store(
 
     let (launch_singleton, datastore) = Launcher::new(lead_coin_name, 1).mint_datastore(
         &mut ctx,
-        DataStoreMetadata {
+        DatastoreMetadata {
             root_hash,
             label,
             description,
@@ -474,14 +474,14 @@ pub fn mint_store(
 }
 
 pub struct SyncStoreResponse {
-    pub latest_store: DataStore,
+    pub latest_store: Datastore,
     pub latest_height: u32,
     pub root_hash_history: Option<Vec<(Bytes32, u64)>>,
 }
 
 pub async fn sync_store(
     peer: &Peer,
-    store: &DataStore,
+    store: &Datastore,
     last_height: Option<u32>,
     last_header_hash: Bytes32,
     with_history: bool,
@@ -523,7 +523,7 @@ pub async fn sync_store(
             solution: puzzle_and_solution_req.solution,
         };
 
-        let new_store = DataStore::<DataStoreMetadata>::from_spend(
+        let new_store = Datastore::<DatastoreMetadata>::from_spend(
             &mut ctx,
             &cs,
             &latest_store.info.delegated_puzzles,
@@ -614,7 +614,7 @@ pub async fn sync_store_using_launcher_id(
         solution: puzzle_and_solution_req.solution,
     };
 
-    let first_store = DataStore::<DataStoreMetadata>::from_spend(&mut ctx, &cs, &[])?
+    let first_store = Datastore::<DatastoreMetadata>::from_spend(&mut ctx, &cs, &[])?
         .ok_or(WalletError::Parse("Store from spend is None".to_string()))?;
 
     let res = sync_store(
@@ -691,7 +691,7 @@ pub enum DataStoreInnerSpend {
 fn update_store_with_conditions(
     ctx: &mut SpendContext,
     conditions: Conditions,
-    datastore: DataStore,
+    datastore: Datastore,
     inner_spend_info: DataStoreInnerSpend,
     allow_admin: bool,
     allow_writer: bool,
@@ -720,7 +720,7 @@ fn update_store_with_conditions(
     let new_spend = datastore.spend(ctx, inner_datastore_spend)?;
 
     let new_datastore =
-        DataStore::<DataStoreMetadata>::from_spend(ctx, &new_spend, &parent_delegated_puzzles)?
+        Datastore::<DatastoreMetadata>::from_spend(ctx, &new_spend, &parent_delegated_puzzles)?
             .ok_or(WalletError::Parse("Store from spend is None".to_string()))?;
 
     Ok(SuccessResponse {
@@ -730,7 +730,7 @@ fn update_store_with_conditions(
 }
 
 pub fn update_store_ownership(
-    datastore: DataStore,
+    datastore: Datastore,
     new_owner_puzzle_hash: Bytes32,
     new_delegated_puzzles: Vec<DelegatedPuzzle>,
     inner_spend_info: DataStoreInnerSpend,
@@ -739,7 +739,7 @@ pub fn update_store_ownership(
 
     let update_condition: Condition = match inner_spend_info {
         DataStoreInnerSpend::Owner(_) => {
-            DataStore::<DataStoreMetadata>::owner_create_coin_condition(
+            Datastore::<DatastoreMetadata>::owner_create_coin_condition(
                 ctx,
                 datastore.info.launcher_id,
                 new_owner_puzzle_hash,
@@ -750,9 +750,9 @@ pub fn update_store_ownership(
         DataStoreInnerSpend::Admin(_) => {
             let merkle_tree = get_merkle_tree(ctx, new_delegated_puzzles.clone())?;
 
-            let new_merkle_root_condition = UpdateDataStoreMerkleRoot {
+            let new_merkle_root_condition = UpdateDatastoreMerkleRoot {
                 new_merkle_root: merkle_tree.root(),
-                memos: DataStore::<DataStoreMetadata>::get_recreation_memos(
+                memos: Datastore::<DatastoreMetadata>::get_recreation_memos(
                     datastore.info.launcher_id,
                     new_owner_puzzle_hash.into(),
                     new_delegated_puzzles,
@@ -779,7 +779,7 @@ pub fn update_store_ownership(
 }
 
 pub fn update_store_metadata(
-    datastore: DataStore,
+    datastore: Datastore,
     new_root_hash: Bytes32,
     new_label: Option<String>,
     new_description: Option<String>,
@@ -797,12 +797,12 @@ pub fn update_store_metadata(
         size_proof: new_size_proof,
     };
     let mut new_metadata_condition = Conditions::new().with(
-        DataStore::<DataStoreMetadata>::new_metadata_condition(ctx, new_metadata)?,
+        Datastore::<DatastoreMetadata>::new_metadata_condition(ctx, new_metadata)?,
     );
 
     if let DataStoreInnerSpend::Owner(_) = inner_spend_info {
         new_metadata_condition = new_metadata_condition.with(
-            DataStore::<DataStoreMetadata>::owner_create_coin_condition(
+            Datastore::<DatastoreMetadata>::owner_create_coin_condition(
                 ctx,
                 datastore.info.launcher_id,
                 datastore.info.owner_puzzle_hash,
@@ -823,7 +823,7 @@ pub fn update_store_metadata(
 }
 
 pub fn melt_store(
-    datastore: DataStore,
+    datastore: Datastore,
     owner_pk: PublicKey,
 ) -> Result<Vec<CoinSpend>, WalletError> {
     let ctx = &mut SpendContext::new();
@@ -847,7 +847,7 @@ pub fn melt_store(
 pub fn oracle_spend(
     spender_synthetic_key: PublicKey,
     selected_coins: Vec<Coin>,
-    datastore: DataStore,
+    datastore: Datastore,
     fee: u64,
 ) -> Result<SuccessResponse, WalletError> {
     let Some(DelegatedPuzzle::Oracle(oracle_ph, oracle_fee)) = datastore
@@ -1733,7 +1733,7 @@ mod melt_kat {
             .iter()
             .find(|cs| cs.coin.puzzle_hash == SINGLETON_LAUNCHER_HASH.into())
             .expect("mint must contain the singleton launcher spend");
-        let launched = DataStore::<DataStoreMetadata>::from_spend(&mut ctx, launcher_spend, &[])?;
+        let launched = Datastore::<DatastoreMetadata>::from_spend(&mut ctx, launcher_spend, &[])?;
         assert!(
             launched.is_some(),
             "from_spend must recognise the datastore-creating launcher spend as Ok(Some)"
@@ -1748,7 +1748,7 @@ mod melt_kat {
         // The pinned property: a valid datastore singleton spend that recreates no
         // odd-amount child (the owner melt) is reported as `Err(MissingChild)`.
         let mut ctx = SpendContext::new();
-        let result = DataStore::<DataStoreMetadata>::from_spend(&mut ctx, &melt_spends[0], &[]);
+        let result = Datastore::<DatastoreMetadata>::from_spend(&mut ctx, &melt_spends[0], &[]);
         assert!(
             matches!(result, Err(DriverError::MissingChild)),
             "0.34 must still surface an owner melt as Err(DriverError::MissingChild), got {result:?}"

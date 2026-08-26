@@ -26,7 +26,7 @@ chia-puzzle-types = "0.36.1"
 chia-traits = "0.36.1"
 thiserror = "1.0.61"
 tokio = "1.39.3"
-chia-wallet-sdk = { version = "0.34.0", features = ["chip-0035", "native-tls", "peer-simulator", "action-layer"] }
+chia-wallet-sdk = { version = "0.36.0", features = ["chip-0035", "native-tls", "peer-simulator", "action-layer"] }
 hex = "0.4.3"
 rand = "0.8"
 futures-util = "0.3"

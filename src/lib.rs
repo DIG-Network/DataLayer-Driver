@@ -20,7 +20,7 @@ pub use chia_protocol::{Bytes, Bytes32, Coin, CoinSpend, CoinState, Program, Spe
 pub use chia_puzzle_types::{EveProof, LineageProof, Proof};
 pub use chia_wallet_sdk::client::Peer;
 pub use chia_wallet_sdk::driver::{
-    DataStore, DataStoreInfo, DataStoreMetadata, DelegatedPuzzle, P2ParentCoin,
+    Datastore, DatastoreInfo, DatastoreMetadata, DelegatedPuzzle, P2ParentCoin,
 };
 pub use chia_wallet_sdk::utils::Address;
 
@@ -264,7 +264,7 @@ pub fn mint_store(
 pub fn oracle_spend(
     spender_synthetic_key: PublicKey,
     selected_coins: Vec<Coin>,
-    store: DataStore,
+    store: Datastore,
     fee: u64,
 ) -> Result<SuccessResponse> {
     Ok(wallet::oracle_spend(
@@ -278,7 +278,7 @@ pub fn oracle_spend(
 /// Updates the metadata of a store (Rust API version).
 #[allow(clippy::too_many_arguments)]
 pub fn update_store_metadata(
-    store: DataStore,
+    store: Datastore,
     new_root_hash: Bytes32,
     new_label: Option<String>,
     new_description: Option<String>,
@@ -299,7 +299,7 @@ pub fn update_store_metadata(
 
 /// Updates the ownership of a store (Rust API version).
 pub fn update_store_ownership(
-    store: DataStore,
+    store: Datastore,
     new_owner_puzzle_hash: Bytes32,
     new_delegated_puzzles: Vec<DelegatedPuzzle>,
     inner_spend_info: wallet::DataStoreInnerSpend,
@@ -313,7 +313,7 @@ pub fn update_store_ownership(
 }
 
 /// Melts a store (Rust API version).
-pub fn melt_store(store: DataStore, owner_pk: PublicKey) -> Result<Vec<CoinSpend>> {
+pub fn melt_store(store: Datastore, owner_pk: PublicKey) -> Result<Vec<CoinSpend>> {
     Ok(wallet::melt_store(store, owner_pk)?)
 }
 
@@ -542,7 +542,7 @@ pub mod async_api {
     /// Synchronizes a datastore (Rust API version).
     pub async fn sync_store(
         peer: &Peer,
-        store: &DataStore,
+        store: &Datastore,
         last_height: Option<u32>,
         last_header_hash: Bytes32,
         with_history: bool,
