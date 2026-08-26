@@ -14,6 +14,15 @@
 //! - Server coin management
 //! - Fee management utilities
 
+// `WalletError` is this crate's single error type, so nearly every fallible function returns it by
+// value. chia-wallet-sdk 0.36 grew `ClientError` to ~136 bytes, which pushes `WalletError` past
+// clippy's 128-byte `result_large_err` threshold — an upstream size change, not a defect in these
+// signatures. Boxing the variant would shrink it, but that reshapes the crate's PUBLIC error enum
+// and every construction and match site with it, which is a deliberate refactor rather than part of
+// a dependency move. Tracked as a follow-up; suppressed here so the size of an upstream struct does
+// not silently become a reason to stop building.
+#![allow(clippy::result_large_err)]
+
 // Re-export core types from dependencies
 pub use chia_bls::{master_to_wallet_unhardened, PublicKey, SecretKey, Signature};
 pub use chia_protocol::{Bytes, Bytes32, Coin, CoinSpend, CoinState, Program, SpendBundle};

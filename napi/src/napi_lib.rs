@@ -7,16 +7,28 @@ use crate::js::{
 
 // Import from the main datalayer-driver crate
 use datalayer_driver::{
-    master_to_wallet_unhardened, types, wallet, xch_server_coin, Bytes as RustBytes,
-    Bytes32 as RustBytes32, Coin as RustCoin, CoinSpend as RustCoinSpend,
+    master_to_wallet_unhardened,
+    types,
+    wallet,
+    xch_server_coin,
+    Bytes as RustBytes,
+    Bytes32 as RustBytes32,
+    Coin as RustCoin,
+    CoinSpend as RustCoinSpend,
     // The chia-wallet-sdk 0.36 rename (`DataStore` -> `Datastore`) is absorbed HERE, at the
     // aliases. The JS-facing `DataStore`/`DataStoreMetadata` structs below deliberately keep
     // their original names: they are the published npm/TypeScript surface, and renaming them
     // would break every JS consumer for an upstream capitalisation change they cannot observe.
-    Datastore as RustDataStore, DatastoreInfo as RustDataStoreInfo,
-    DatastoreMetadata as RustDataStoreMetadata, DelegatedPuzzle as RustDelegatedPuzzle,
-    Peer as RustPeer, Proof as RustProof, PublicKey as RustPublicKey, SecretKey as RustSecretKey,
-    Signature as RustSignature, SpendBundle as RustSpendBundle,
+    Datastore as RustDataStore,
+    DatastoreInfo as RustDataStoreInfo,
+    DatastoreMetadata as RustDataStoreMetadata,
+    DelegatedPuzzle as RustDelegatedPuzzle,
+    Peer as RustPeer,
+    Proof as RustProof,
+    PublicKey as RustPublicKey,
+    SecretKey as RustSecretKey,
+    Signature as RustSignature,
+    SpendBundle as RustSpendBundle,
 };
 
 use chia_protocol::{CoinStateUpdate, NewPeakWallet, ProtocolMessageTypes};

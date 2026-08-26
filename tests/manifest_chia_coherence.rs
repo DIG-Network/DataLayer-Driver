@@ -76,7 +76,11 @@ struct Declared {
 impl Declared {
     /// The `MAJOR.MINOR` line this requirement sits on — the granularity a family must agree at.
     fn line(&self) -> String {
-        self.version.split('.').take(2).collect::<Vec<_>>().join(".")
+        self.version
+            .split('.')
+            .take(2)
+            .collect::<Vec<_>>()
+            .join(".")
     }
 }
 

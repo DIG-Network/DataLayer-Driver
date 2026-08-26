@@ -1684,14 +1684,19 @@ pub async fn resolve_did_string_and_generate_proof(
 
 #[cfg(test)]
 mod melt_kat {
-    //! Custody KAT pinning `DataStore::from_spend`'s melt signal under the
-    //! chia-wallet-sdk 0.34 family (dig_ecosystem#2133).
+    //! Custody KAT pinning `Datastore::from_spend`'s melt signal across the
+    //! chia-wallet-sdk 0.34 -> 0.36 move (dig_ecosystem#2133, #3161).
     //!
     //! The just-merged digstore-chain #1981 melt classifier depends on the load-
     //! bearing fact that a childless datastore singleton spend (an owner melt)
     //! surfaces as `Err(DriverError::MissingChild)`, while a spend that recreates
     //! the datastore surfaces as `Ok(Some(_))`. This test drives a real
-    //! peer-simulator mint -> melt and asserts both signals hold under 0.34.
+    //! peer-simulator mint -> melt and asserts both signals hold under 0.36.
+    //!
+    //! Its expected values are UNCHANGED by the 0.36 adoption: only the type's
+    //! spelling moved (`DataStore` -> `Datastore`). Had either signal changed,
+    //! this test would have gone red rather than needing an edit — which is the
+    //! evidence that the melt classifier downstream is still safe.
     use super::*;
     use chia_wallet_sdk::test::{BlsPair, Simulator};
 
@@ -1751,7 +1756,7 @@ mod melt_kat {
         let result = Datastore::<DatastoreMetadata>::from_spend(&mut ctx, &melt_spends[0], &[]);
         assert!(
             matches!(result, Err(DriverError::MissingChild)),
-            "0.34 must still surface an owner melt as Err(DriverError::MissingChild), got {result:?}"
+            "0.36 must still surface an owner melt as Err(DriverError::MissingChild), got {result:?}"
         );
 
         Ok(())
