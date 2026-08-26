@@ -16,7 +16,7 @@ pub use datalayer_driver::{
     master_secret_key_to_wallet_synthetic_secret_key, master_to_wallet_unhardened,
     oracle_delegated_puzzle, secret_key_to_public_key, synthetic_key_to_puzzle_hash, types, wallet,
     writer_delegated_puzzle_from_key, xch_server_coin, BlsPair, Bytes, Bytes32, Coin, CoinSpend,
-    CoinState, DataStoreInfo, EveProof, LineageProof, Program, Proof, PublicKey, SecretKey,
+    CoinState, DatastoreInfo, EveProof, LineageProof, Program, Proof, PublicKey, SecretKey,
     Signature, SimulatorPuzzle, SpendBundle, XchServerCoin,
 };
 

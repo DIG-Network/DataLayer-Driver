@@ -1,5 +1,5 @@
 pub use crate::xch_server_coin::XchServerCoin;
-use crate::DataStore;
+use crate::Datastore;
 use chia_bls::{PublicKey, SecretKey};
 pub use chia_protocol::*;
 pub use chia_puzzle_types::{EveProof, LineageProof, Proof};
@@ -18,7 +18,7 @@ pub struct BlsPair {
 #[derive(Clone, Debug)]
 pub struct SuccessResponse {
     pub coin_spends: Vec<CoinSpend>,
-    pub new_datastore: DataStore,
+    pub new_datastore: Datastore,
 }
 
 pub struct UnspentCoinsResponse {

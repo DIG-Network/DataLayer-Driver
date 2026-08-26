@@ -5,7 +5,7 @@ members = [".", "napi"]
 [package]
 edition = "2021"
 name = "datalayer-driver"
-version = "4.0.0"
+version = "5.0.0"
 license = "MIT"
 authors = ["yakuhito <y@kuhi.to>", "William Wills <wwills2@protonmail.com>"]
 homepage = "https://github.com/DIG-Network/DataLayer-Driver"
@@ -26,7 +26,7 @@ chia-puzzle-types = "0.36.1"
 thiserror = "1.0.61"
 clvmr = "0.16.2"
 tokio = "1.39.3"
-chia-wallet-sdk = { version = "0.34.0", features = ["chip-0035", "native-tls", "peer-simulator", "action-layer"] }
+chia-wallet-sdk = { version = "0.36.0", features = ["chip-0035", "native-tls", "peer-simulator", "action-layer"] }
 hex-literal = "0.4.1"
 num-bigint = "0.4.6"
 hex = "0.4.3"
