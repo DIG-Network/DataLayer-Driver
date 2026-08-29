@@ -13,8 +13,28 @@ use chia_wallet_sdk::prelude::{AssertConcurrentSpend, Conditions, ToTreeHash, MA
 use clvm_traits::{FromClvm, ToClvm};
 use clvmr::Allocator;
 use indexmap::indexmap;
-use num_bigint::BigInt;
 
+/// A `$DIG` collateral coin.
+///
+/// # The mirror-collateral namespace is not served here
+///
+/// This type once also derived and minted **mirror** collateral coins, under the namespace tag
+/// `DIG_STORE_MIRROR_COLLATERAL`, from `morph(store_launcher_id + epoch)`. Both the morph and its
+/// mint path (`morph_store_launcher_id_for_mirror`, `create_mirror`) were removed in 6.0.0.
+///
+/// They were removed rather than renamed because they were not a second namespace that merely
+/// shared a tag — they were the *same* namespace as the canonical one. `dig-mirror-coin` hints a
+/// mirror coin under `morph(store + root + owner + epoch)` beneath that identical tag, and because
+/// both morphs hash an additive sum, the extra terms are absorbed rather than separating: an author
+/// who freely chooses the epoch can solve `e' = store + epoch - store' - root' - owner'` and land a
+/// coin bonding their own store and root exactly on a hint derived here. `dig-mirror-coin` closes
+/// that one level up, by having the coin *declare* its four terms and checking the declaration as
+/// well as the recompute; the two-term form had no such check and no way to add one, since the
+/// epoch it was built with is not recoverable from the hint.
+///
+/// Mirror collateral therefore has a single owner: use the `dig-mirror-coin` crate. Coins already
+/// minted through the removed path are unaffected — [`Self::from_coin_state`] reads the morphed id
+/// out of the coin's memos and never recomputes it, and [`Self::spend`] does not use the hint.
 #[derive(Debug, Clone)]
 pub struct DigCollateralCoin {
     inner: P2ParentCoin,
@@ -36,19 +56,6 @@ impl DigCollateralCoin {
     /// Morphs a DIG store launcher ID into the DIG store collateral coin namespace.
     pub fn morph_store_launcher_id_for_collateral(store_launcher_id: Bytes32) -> Bytes32 {
         (store_launcher_id, "DIG_STORE_COLLATERAL")
-            .tree_hash()
-            .into()
-    }
-
-    /// Morphs a DIG store launcher ID into the DIG mirror collateral coin namespace.
-    pub fn morph_store_launcher_id_for_mirror(
-        store_launcher_id: Bytes32,
-        offset: &BigInt,
-    ) -> Bytes32 {
-        let launcher_id_int = BigInt::from_signed_bytes_be(&store_launcher_id);
-        let offset_launcher_id = launcher_id_int + offset;
-
-        (offset_launcher_id, "DIG_STORE_MIRROR_COLLATERAL")
             .tree_hash()
             .into()
     }
@@ -166,40 +173,6 @@ impl DigCollateralCoin {
         Self::build_coin_spends(
             &mut ctx,
             hint,
-            dig_coins,
-            amount,
-            synthetic_key,
-            fee_coins,
-            fee,
-        )
-    }
-
-    #[allow(clippy::result_large_err, clippy::too_many_arguments)]
-    pub fn create_mirror(
-        dig_coins: Vec<DigCoin>,
-        amount: u64,
-        store_id: Bytes32,
-        mirror_urls: Vec<String>,
-        epoch: BigInt,
-        synthetic_key: PublicKey,
-        fee_coins: Vec<Coin>,
-        fee: u64,
-    ) -> Result<Vec<CoinSpend>, WalletError> {
-        let mut ctx = SpendContext::new();
-        let morphed_store_id = Self::morph_store_launcher_id_for_mirror(store_id, &epoch);
-        let mut memos_vec = Vec::with_capacity(mirror_urls.len() + 1);
-        memos_vec.push(morphed_store_id.to_vec());
-
-        for url in &mirror_urls {
-            memos_vec.push(url.as_bytes().to_vec());
-        }
-
-        let memos_node_ptr = ctx.alloc(&memos_vec)?;
-        let memos = Memos::Some(memos_node_ptr);
-
-        Self::build_coin_spends(
-            &mut ctx,
-            memos,
             dig_coins,
             amount,
             synthetic_key,
