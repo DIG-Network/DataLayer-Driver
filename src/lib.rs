@@ -735,3 +735,5 @@ mod examples {
         */
     }
 }
+
+// CI proof-of-attachment marker for dig_ecosystem#3164 (branch protection provisioning) -- safe to remove on any future touch.
